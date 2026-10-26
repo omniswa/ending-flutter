@@ -23,6 +23,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   Note? _note;
   int _color = 0;
   Timer? _debounce;
+  bool _deleted = false;
 
   @override
   void initState() {
@@ -53,6 +54,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   /// Saves unless the note is brand new and still empty.
   void _save() {
     _debounce?.cancel();
+    if (_deleted) return; // popping after delete must not resurrect the note
     final title = _title.text.trim();
     final body = _body.text;
     if (_note == null && title.isEmpty && body.trim().isEmpty) return;
@@ -70,6 +72,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     final ok = await confirmDialog(context, title: 'Delete note?', message: 'This can\'t be undone.', action: 'Delete');
     if (!ok) return;
     _debounce?.cancel();
+    _deleted = true;
     if (_note != null) _notes.delete(_note!.id);
     nav.pop();
   }
