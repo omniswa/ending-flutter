@@ -12,8 +12,15 @@ import '../core/config.dart';
 import '../models/book.dart';
 import 'local_store.dart';
 
+class BookContent {
+  const BookContent(this.chapters, this.titles);
+  final List<String> chapters;
+  final List<String?> titles; // same length as chapters; null = no title
+}
+
 class BookRepository {
-  BookRepository(this._store, {http.Client? client}) : _client = client ?? http.Client();
+  BookRepository(this._store, {http.Client? client})
+    : _client = client ?? http.Client();
 
   static const _cacheKey = 'books_index_cache';
   final LocalStore _store;
@@ -41,25 +48,68 @@ class BookRepository {
     }
   }
 
-  List<Book> _parse(Object? json) => (json as List)
-      .map((e) => Book.fromJson(e as Map<String, dynamic>))
-      .toList();
+  List<Book> _parse(Object? json) {
+    final out = <Book>[];
+    for (final e in json as List) {
+      try {
+        out.add(Book.fromJson(e as Map<String, dynamic>));
+      } on Object catch (err) {
+        debugPrint('Skipping bad book entry: $err\n$e');
+      }
+    }
+    return out;
+  }
 
   Future<Directory> _bookDir(Book book) async {
     final root = await getApplicationDocumentsDirectory();
     return Directory(p.join(root.path, 'books', '${book.id}'));
   }
 
-  /// Returns chapter texts in order, downloading and unzipping on first use.
-  Future<List<String>> loadChapters(Book book) async {
+  /// Returns chapter texts + titles in order, downloading on first use.
+  Future<BookContent> loadContent(Book book) async {
     final dir = await _bookDir(book);
-    var files = _chapterFiles(dir);
-    if (files.isEmpty) {
-      await _download(book, dir);
-      files = _chapterFiles(dir);
+    if (_chapterFiles(dir).isEmpty) await _download(book, dir);
+
+    final chapters = <String>[];
+    final titles = <String?>[];
+
+    // 1) Prefer manifest.json (order + titles).
+    for (final e in _readManifest(dir) ?? const []) {
+      final f = File(p.join(dir.path, e.file));
+      if (!f.existsSync()) continue;
+      chapters.add(await f.readAsString());
+      titles.add(e.title == null || e.title!.isEmpty ? null : e.title);
     }
-    if (files.isEmpty) throw const FormatException('This book has no chapters.');
-    return Future.wait(files.map((f) => f.readAsString()));
+
+    // 2) Fallback: numbered files (1.txt, 2.txt, ...).
+    if (chapters.isEmpty) {
+      for (final f in _chapterFiles(dir)) {
+        chapters.add(await f.readAsString());
+        titles.add(null);
+      }
+    }
+
+    if (chapters.isEmpty)
+      throw const FormatException('This book has no chapters.');
+    return BookContent(chapters, titles);
+  }
+
+  List<({String file, String? title})>? _readManifest(Directory dir) {
+    final f = File(p.join(dir.path, 'manifest.json'));
+    if (!f.existsSync()) return null;
+    try {
+      final json = jsonDecode(f.readAsStringSync()) as Map<String, dynamic>;
+      final list = (json['chapters'] as List).map((e) {
+        final m = e as Map<String, dynamic>;
+        return (
+          file: p.basename(m['file'] as String), // basename blocks "../" tricks
+          title: (m['title'] as String?)?.trim(),
+        );
+      }).toList();
+      return list.isEmpty ? null : list;
+    } on Object {
+      return null; // malformed manifest: fall back to numbered files
+    }
   }
 
   List<File> _chapterFiles(Directory dir) {
@@ -75,7 +125,9 @@ class BookRepository {
   }
 
   Future<void> _download(Book book, Directory dir) async {
-    final res = await _client.get(_resolve(book.zip)).timeout(const Duration(minutes: 2));
+    final res = await _client
+        .get(_resolve(book.zip))
+        .timeout(const Duration(minutes: 2));
     if (res.statusCode != 200) {
       throw HttpException('Download failed (${res.statusCode})');
     }
@@ -105,7 +157,8 @@ Map<String, String> _extractChapters(Uint8List bytes) {
   for (final f in archive.files) {
     if (!f.isFile) continue;
     final name = p.basename(f.name);
-    if (!RegExp(r'^\d+\.txt$').hasMatch(name)) continue;
+    if (name != 'manifest.json' && !RegExp(r'^\d+\.txt$').hasMatch(name))
+      continue;
     out[name] = utf8.decode(f.content as List<int>, allowMalformed: true);
   }
   return out;
