@@ -81,64 +81,75 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('My Favorites', style: t.headlineMedium?.copyWith(fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 4),
-                  Text(all == 1 ? '1 book saved' : '$all books saved', style: t.bodyMedium?.copyWith(color: AppColors.muted)),
-                ]),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Favorites', style: t.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 2),
+                    Text(all == 1 ? '1 book saved' : '$all books saved', style: t.bodyMedium?.copyWith(color: AppColors.muted)),
+                  ]),
+                ),
+                PopupMenuButton<_Sort>(
+                  tooltip: 'Sort by',
+                  initialValue: _sort,
+                  onSelected: (s) => setState(() => _sort = s),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  itemBuilder: (_) => [
+                    for (final s in _Sort.values)
+                      PopupMenuItem(
+                        value: s,
+                        child: Row(children: [
+                          Icon(s.icon, size: 18, color: s == _sort ? AppColors.sage : AppColors.muted),
+                          const SizedBox(width: 12),
+                          Text(s.label, style: TextStyle(fontWeight: s == _sort ? FontWeight.w700 : FontWeight.w500)),
+                        ]),
+                      ),
+                  ],
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: const BoxDecoration(color: AppColors.chip, shape: BoxShape.circle),
+                    child: const Icon(Icons.sort_rounded, size: 22),
+                  ),
+                ),
               ],
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-            child: SizedBox(
-              width: double.infinity,
-              child: SegmentedButton<_Filter>(
-                showSelectedIcon: false,
-                segments: const [
-                  ButtonSegment(value: _Filter.all, label: Text('All')),
-                  ButtonSegment(value: _Filter.reading, label: Text('Reading')),
-                  ButtonSegment(value: _Filter.finished, label: Text('Finished')),
-                ],
-                selected: {_filter},
-                onSelectionChanged: (s) => setState(() => _filter = s.first),
+          if (all > 0)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+              child: SizedBox(
+                width: double.infinity,
+                child: SegmentedButton<_Filter>(
+                  showSelectedIcon: false,
+                  style: SegmentedButton.styleFrom(
+                    backgroundColor: AppColors.chip,
+                    selectedBackgroundColor: AppColors.sage,
+                    selectedForegroundColor: Colors.white,
+                    foregroundColor: AppColors.ink,
+                    side: BorderSide.none,
+                  ),
+                  segments: const [
+                    ButtonSegment(value: _Filter.all, label: Text('All')),
+                    ButtonSegment(value: _Filter.reading, label: Text('Reading')),
+                    ButtonSegment(value: _Filter.finished, label: Text('Finished')),
+                  ],
+                  selected: {_filter},
+                  onSelectionChanged: (s) => setState(() => _filter = s.first),
+                ),
               ),
             ),
-          ),
-          SizedBox(
-            height: 52,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-              itemCount: _Sort.values.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
-              itemBuilder: (_, i) {
-                final s = _Sort.values[i];
-                final sel = s == _sort;
-                return ChoiceChip(
-                  selected: sel,
-                  showCheckmark: false,
-                  avatar: Icon(s.icon, size: 16, color: sel ? Colors.white : AppColors.muted),
-                  label: Text(s.label, style: TextStyle(color: sel ? Colors.white : AppColors.ink)),
-                  onSelected: (_) => setState(() => _sort = s),
-                );
-              },
-            ),
-          ),
           Expanded(
             child: items.isEmpty
                 ? EmptyState(
                     icon: Icons.favorite_border_rounded,
                     title: all == 0 ? 'No favorites yet' : 'Nothing here',
-                    message: all == 0
-                        ? 'Tap the heart on any book to save it here.'
-                        : 'No books match this filter.',
+                    message: all == 0 ? 'Tap the heart on any book to save it here.' : 'No books match this filter.',
                   )
                 : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
                     itemCount: items.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 14),
-                    itemBuilder: (_, i) => _FavoriteCard(item: items[i]),
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemBuilder: (_, i) => _FavoriteCard(key: ValueKey('fav_${items[i].book.id}'), item: items[i]),
                   ),
           ),
         ],
@@ -148,8 +159,15 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 }
 
 class _FavoriteCard extends StatelessWidget {
-  const _FavoriteCard({required this.item});
+  const _FavoriteCard({super.key, required this.item});
   final _Item item;
+
+  void _remove(BuildContext context, UserDataProvider user) {
+    final book = item.book;
+    final removed = user.removeFavorite(book.id);
+    if (removed == null) return;
+    showUndoSnack(context, 'Removed "${book.title}"', () => user.restoreFavorite(removed));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -160,115 +178,80 @@ class _FavoriteCard extends StatelessWidget {
     final p = item.progress;
 
     return Dismissible(
-      key: ValueKey('fav_${book.id}'),
+      key: ValueKey('dismiss_${book.id}'),
       direction: DismissDirection.endToStart,
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 24),
-        decoration: BoxDecoration(color: AppColors.danger.withValues(alpha: 0.9), borderRadius: BorderRadius.circular(20)),
-        child: const Icon(Icons.delete_outline_rounded, color: Colors.white),
+        decoration: BoxDecoration(color: AppColors.danger, borderRadius: BorderRadius.circular(16)),
+        child: const Icon(Icons.favorite_border_rounded, color: Colors.white),
       ),
-      onDismissed: (_) {
-        final removed = user.removeFavorite(book.id);
-        ScaffoldMessenger.of(context)
-          ..clearSnackBars()
-          ..showSnackBar(SnackBar(
-            content: Text('Removed "${book.title}"'),
-            action: removed == null ? null : SnackBarAction(label: 'UNDO', onPressed: () => user.restoreFavorite(removed)),
-          ));
-      },
+      onDismissed: (_) => _remove(context, user),
       child: SoftCard(
+        padding: const EdgeInsets.all(10),
         onTap: () => ReaderScreen.open(context, book),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            BookCover(url: book.cover, width: 76, height: 114),
-            const SizedBox(width: 14),
-            Expanded(
-              child: SizedBox(
-                height: 114,
+        child: SizedBox(
+          height: 108,
+          child: Row(
+            children: [
+              BookCover(url: book.cover, width: 72, height: 108),
+              const SizedBox(width: 14),
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(book.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: t.titleMedium?.copyWith(fontWeight: FontWeight.w700, height: 1.15)),
-                              Text(book.author, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.bodyMedium?.copyWith(color: AppColors.muted)),
-                            ],
-                          ),
-                        ),
-                        SizedBox(
-                          width: 32,
-                          height: 32,
-                          child: PopupMenuButton<String>(
-                            padding: EdgeInsets.zero,
-                            icon: const Icon(Icons.more_horiz_rounded),
-                            onSelected: (v) {
-                              if (v == 'finish') user.setFinished(book.id, finished: !finished);
-                              if (v == 'remove') user.removeFavorite(book.id);
-                            },
-                            itemBuilder: (_) => [
-                              PopupMenuItem(
-                                value: 'finish',
-                                child: ListTile(
-                                  dense: true,
-                                  contentPadding: EdgeInsets.zero,
-                                  leading: Icon(finished ? Icons.undo_rounded : Icons.check_circle_outline_rounded),
-                                  title: Text(finished ? 'Mark as reading' : 'Mark as finished'),
-                                ),
-                              ),
-                              const PopupMenuItem(
-                                value: 'remove',
-                                child: ListTile(
-                                  dense: true,
-                                  contentPadding: EdgeInsets.zero,
-                                  leading: Icon(Icons.favorite_border_rounded, color: AppColors.danger),
-                                  title: Text('Remove from favorites'),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+                    Text(book.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: t.titleMedium?.copyWith(fontWeight: FontWeight.w700, height: 1.2)),
+                    const SizedBox(height: 2),
+                    Text(book.author, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.bodyMedium?.copyWith(color: AppColors.muted)),
+                    const Spacer(),
                     if (finished)
-                      const _Badge(icon: Icons.check_circle_rounded, label: 'Finished', color: AppColors.sage)
-                    else if (p != null) ...[
+                      Row(mainAxisSize: MainAxisSize.min, children: [
+                        const Icon(Icons.check_circle_rounded, size: 16, color: AppColors.sage),
+                        const SizedBox(width: 4),
+                        Text('Finished', style: t.labelMedium?.copyWith(color: AppColors.sage, fontWeight: FontWeight.w700)),
+                      ])
+                    else if (p != null && p.percent > 0) ...[
+                      ProgressBar(value: p.percent),
+                      const SizedBox(height: 5),
                       Text('${formatPercent(p.percent)} · ${formatTimeLeft(p.minutesLeft)}', style: t.labelSmall?.copyWith(color: AppColors.muted)),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(value: p.percent.clamp(0.02, 1.0), minHeight: 5, backgroundColor: AppColors.chip, color: AppColors.terracotta),
-                      ),
                     ] else
-                      const _Badge(icon: Icons.bookmark_border_rounded, label: 'Not started', color: AppColors.muted),
-                    Text('Saved ${formatDate(item.entry.addedAt)}', style: t.labelSmall?.copyWith(color: AppColors.muted)),
+                      Text('Not started', style: t.labelSmall?.copyWith(color: AppColors.muted)),
                   ],
                 ),
               ),
-            ),
-          ],
+              Align(
+                alignment: Alignment.topCenter,
+                child: PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_horiz_rounded, color: AppColors.muted),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  onSelected: (v) {
+                    if (v == 'finish') user.setFinished(book.id, finished: !finished);
+                    if (v == 'remove') _remove(context, user);
+                  },
+                  itemBuilder: (_) => [
+                    PopupMenuItem(
+                      value: 'finish',
+                      child: Row(children: [
+                        Icon(finished ? Icons.undo_rounded : Icons.check_circle_outline_rounded, size: 20),
+                        const SizedBox(width: 12),
+                        Text(finished ? 'Mark as reading' : 'Mark as finished'),
+                      ]),
+                    ),
+                    const PopupMenuItem(
+                      value: 'remove',
+                      child: Row(children: [
+                        Icon(Icons.favorite_border_rounded, size: 20, color: AppColors.danger),
+                        SizedBox(width: 12),
+                        Text('Remove'),
+                      ]),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
-}
-
-class _Badge extends StatelessWidget {
-  const _Badge({required this.icon, required this.label, required this.color});
-  final IconData icon;
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 16, color: color),
-        const SizedBox(width: 4),
-        Text(label, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: color, fontWeight: FontWeight.w700)),
-      ]);
 }
