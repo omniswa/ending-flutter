@@ -1,6 +1,5 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../core/config.dart';
@@ -23,7 +22,6 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final _search = TextEditingController();
-  bool _searching = false;
 
   @override
   void dispose() {
@@ -31,134 +29,124 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  void _toggleSearch(LibraryProvider lib) {
-    setState(() => _searching = !_searching);
-    if (!_searching) {
-      _search.clear();
-      lib.setQuery('');
-    }
+  void _clearSearch(LibraryProvider lib) {
+    _search.clear();
+    lib.setQuery('');
   }
 
   @override
   Widget build(BuildContext context) {
     final lib = context.watch<LibraryProvider>();
     final user = context.watch<UserDataProvider>();
-    final t = Theme.of(context).textTheme;
+    final searching = lib.query.isNotEmpty;
 
     final recent = <(Book, ReadingProgress)>[];
-    for (final p in user.recent) {
-      final b = lib.byId(p.bookId);
-      if (b != null) recent.add((b, p));
+    if (!searching) {
+      for (final p in user.recent) {
+        final b = lib.byId(p.bookId);
+        if (b != null && p.percent > 0) recent.add((b, p));
+        if (recent.length == 8) break;
+      }
     }
     final books = lib.filtered;
 
     return SafeArea(
       bottom: false,
       child: RefreshIndicator(
+        color: AppColors.sage,
         onRefresh: lib.load,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           slivers: [
-            SliverToBoxAdapter(child: _header(lib)),
-            if (_searching)
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-                  child: TextField(
-                    controller: _search,
-                    autofocus: true,
-                    textInputAction: TextInputAction.search,
-                    onChanged: lib.setQuery,
-                    decoration: InputDecoration(
-                      hintText: 'Search by title or author',
-                      prefixIcon: const Icon(Icons.search_rounded),
-                      filled: true,
-                      fillColor: AppColors.surface,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                    ),
-                  ),
-                ),
-              ),
+            SliverToBoxAdapter(child: _header(context, lib)),
             if (recent.isNotEmpty) ...[
+              const SliverToBoxAdapter(child: SectionTitle('Continue reading')),
               SliverToBoxAdapter(
-                child: SectionTitle(
-                  'Recently Read',
-                  trailing: recent.length > 4
-                      ? TextButton.icon(
-                          onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => RecentScreen(items: recent))),
-                          iconAlignment: IconAlignment.end,
-                          icon: const Icon(Icons.arrow_forward_rounded, size: 18),
-                          label: const Text('SEE ALL', style: TextStyle(fontWeight: FontWeight.w700, letterSpacing: 0.6)),
-                          style: TextButton.styleFrom(foregroundColor: AppColors.terracotta),
-                        )
-                      : null,
-                ),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                sliver: SliverGrid.builder(
-                  gridDelegate: recentGridDelegate,
-                  itemCount: math.min(4, recent.length),
-                  itemBuilder: (_, i) => RecentCard(
-                    book: recent[i].$1,
-                    progress: recent[i].$2,
-                    onTap: () => ReaderScreen.open(context, recent[i].$1),
+                child: SizedBox(
+                  height: 252,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    itemCount: recent.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 14),
+                    itemBuilder: (_, i) => RecentCard(
+                      book: recent[i].$1,
+                      progress: recent[i].$2,
+                      onTap: () => ReaderScreen.open(context, recent[i].$1),
+                    ),
                   ),
                 ),
               ),
             ],
             SliverToBoxAdapter(
-              child: SectionTitle('Library', trailing: Text('${books.length} books', style: t.labelMedium?.copyWith(color: AppColors.muted))),
-            ),
-            if (lib.author != null)
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: InputChip(label: Text(lib.author!), onDeleted: () => lib.setAuthor(null)),
-                  ),
-                ),
+              child: SectionTitle(
+                searching ? 'Results' : 'Library',
+                trailing: lib.state == LoadState.ready
+                    ? Text(books.length == 1 ? '1 book' : '${books.length} books',
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.muted))
+                    : null,
               ),
+            ),
             ..._librarySlivers(lib, user, books),
-            const SliverToBoxAdapter(child: SizedBox(height: 28)),
+            const SliverToBoxAdapter(child: SizedBox(height: 32)),
           ],
         ),
       ),
     );
   }
 
-  Widget _header(LibraryProvider lib) => Padding(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(children: [
-                    const Icon(Icons.auto_stories_rounded, color: AppColors.terracotta, size: 34),
-                    const SizedBox(width: 8),
-                    Text(AppConfig.appName,
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: 1)),
-                  ]),
-                  const SizedBox(height: 4),
-                  Text(AppConfig.tagline,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(fontSize: 12, letterSpacing: 2.2, color: AppColors.muted)),
-                ],
+  Widget _header(BuildContext context, LibraryProvider lib) {
+    final t = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(AppConfig.appName, style: t.headlineMedium?.copyWith(fontWeight: FontWeight.w700, letterSpacing: 1.2)),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _search,
+            textInputAction: TextInputAction.search,
+            onChanged: lib.setQuery,
+            decoration: InputDecoration(
+              hintText: 'Search titles or authors',
+              hintStyle: const TextStyle(color: AppColors.muted),
+              prefixIcon: const Icon(Icons.search_rounded, color: AppColors.muted),
+              suffixIcon: ValueListenableBuilder<TextEditingValue>(
+                valueListenable: _search,
+                builder: (_, v, __) => v.text.isEmpty
+                    ? const SizedBox.shrink()
+                    : IconButton(
+                        tooltip: 'Clear',
+                        icon: const Icon(Icons.close_rounded, size: 20),
+                        onPressed: () => _clearSearch(lib),
+                      ),
               ),
+              filled: true,
+              fillColor: AppColors.chip,
+              contentPadding: const EdgeInsets.symmetric(vertical: 14),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
             ),
-            RoundIconButton(icon: _searching ? Icons.close_rounded : Icons.search_rounded, tooltip: 'Search', onTap: () => _toggleSearch(lib)),
-            const SizedBox(width: 10),
-            RoundIconButton(icon: Icons.tune_rounded, tooltip: 'Filter by author', badge: lib.author != null, onTap: () => _showFilterSheet(context)),
-          ],
-        ),
-      );
+          ),
+        ],
+      ),
+    );
+  }
 
   List<Widget> _librarySlivers(LibraryProvider lib, UserDataProvider user, List<Book> books) {
     switch (lib.state) {
       case LoadState.loading:
-        return const [SliverToBoxAdapter(child: Padding(padding: EdgeInsets.all(48), child: Center(child: CircularProgressIndicator())))];
+        return [
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            sliver: SliverList.separated(
+              itemCount: 4,
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              itemBuilder: (_, __) => const _SkeletonCard(),
+            ),
+          ),
+        ];
       case LoadState.error:
         return [
           SliverToBoxAdapter(
@@ -177,13 +165,12 @@ class _HomeScreenState extends State<HomeScreen> {
             SliverToBoxAdapter(
               child: EmptyState(
                 icon: Icons.search_off_rounded,
-                title: 'No books found',
-                message: 'Try a different title, author, or clear your filters.',
-                actionLabel: lib.hasFilters ? 'Clear filters' : null,
-                onAction: () {
-                  _search.clear();
-                  lib.clearFilters();
-                },
+                title: lib.query.isEmpty ? 'No books yet' : 'No matches',
+                message: lib.query.isEmpty
+                    ? 'Pull down to refresh the library.'
+                    : 'Try a different title or author.',
+                actionLabel: lib.query.isEmpty ? null : 'Clear search',
+                onAction: () => _clearSearch(lib),
               ),
             ),
           ];
@@ -193,28 +180,26 @@ class _HomeScreenState extends State<HomeScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             sliver: SliverList.separated(
               itemCount: books.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 14),
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
               itemBuilder: (_, i) => _LibraryCard(
+                key: ValueKey(books[i].id),
                 book: books[i],
                 progress: user.progressFor(books[i].id),
                 favorite: user.isFavorite(books[i].id),
-                onFavorite: () => user.toggleFavorite(books[i].id),
+                onFavorite: () {
+                  HapticFeedback.selectionClick();
+                  user.toggleFavorite(books[i].id);
+                },
               ),
             ),
           ),
         ];
     }
   }
-
-  void _showFilterSheet(BuildContext context) => showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        builder: (_) => const _FilterSheet(),
-      );
 }
 
 class _LibraryCard extends StatelessWidget {
-  const _LibraryCard({required this.book, required this.progress, required this.favorite, required this.onFavorite});
+  const _LibraryCard({super.key, required this.book, required this.progress, required this.favorite, required this.onFavorite});
   final Book book;
   final ReadingProgress? progress;
   final bool favorite;
@@ -223,96 +208,46 @@ class _LibraryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
-    final started = progress != null && progress!.percent > 0;
+    final p = progress;
     return SoftCard(
+      padding: const EdgeInsets.all(10),
       onTap: () => ReaderScreen.open(context, book),
       child: SizedBox(
-        height: 132,
+        height: 108,
         child: Row(
           children: [
-            BookCover(url: book.cover, width: 88, height: 132),
-            const SizedBox(width: 16),
+            BookCover(url: book.cover, width: 72, height: 108),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(book.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: t.titleMedium?.copyWith(fontWeight: FontWeight.w700, height: 1.15)),
-                            const SizedBox(height: 2),
-                            Text(book.author, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.bodyMedium),
-                            Text('Added: ${formatDate(book.added)}', style: t.bodySmall?.copyWith(color: AppColors.muted)),
-                          ],
-                        ),
-                      ),
-                      IconButton.filledTonal(
-                        visualDensity: VisualDensity.compact,
-                        tooltip: favorite ? 'Remove from favorites' : 'Add to favorites',
-                        style: IconButton.styleFrom(backgroundColor: AppColors.chip),
-                        onPressed: onFavorite,
-                        icon: Icon(favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                            size: 20, color: favorite ? AppColors.terracotta : AppColors.ink),
-                      ),
-                    ],
-                  ),
-                  PillButton(
-                    label: started ? 'Continue · ${formatPercent(progress!.percent)}' : 'Read Book',
-                    onPressed: () => ReaderScreen.open(context, book),
-                  ),
+                  Text(book.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: t.titleMedium?.copyWith(fontWeight: FontWeight.w700, height: 1.2)),
+                  const SizedBox(height: 2),
+                  Text(book.author, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.bodyMedium?.copyWith(color: AppColors.muted)),
+                  const Spacer(),
+                  if (p != null && p.percent > 0) ...[
+                    ProgressBar(value: p.percent),
+                    const SizedBox(height: 5),
+                    Text('${formatPercent(p.percent)} · ${formatTimeLeft(p.minutesLeft)}', style: t.labelSmall?.copyWith(color: AppColors.muted)),
+                  ] else
+                    Text('Added ${formatDate(book.added)}', style: t.labelSmall?.copyWith(color: AppColors.muted)),
                 ],
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FilterSheet extends StatelessWidget {
-  const _FilterSheet();
-
-  @override
-  Widget build(BuildContext context) {
-    final lib = context.watch<LibraryProvider>();
-    final t = Theme.of(context).textTheme;
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              Text('Filter by author', style: t.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
-              const Spacer(),
-              TextButton(onPressed: lib.author == null ? null : () => lib.setAuthor(null), child: const Text('Clear')),
-            ]),
-            const SizedBox(height: 8),
-            Flexible(
-              child: SingleChildScrollView(
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final a in lib.authors)
-                      ChoiceChip(
-                        label: Text(a),
-                        selected: lib.author == a,
-                        showCheckmark: false,
-                        labelStyle: TextStyle(color: lib.author == a ? Colors.white : AppColors.ink),
-                        onSelected: (sel) {
-                          lib.setAuthor(sel ? a : null);
-                          Navigator.pop(context);
-                        },
-                      ),
-                  ],
+            Align(
+              alignment: Alignment.topCenter,
+              child: IconButton(
+                tooltip: favorite ? 'Remove from favorites' : 'Add to favorites',
+                onPressed: onFavorite,
+                icon: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 180),
+                  transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
+                  child: Icon(
+                    favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                    key: ValueKey(favorite),
+                    color: favorite ? AppColors.terracotta : AppColors.muted,
+                  ),
                 ),
               ),
             ),
@@ -323,22 +258,43 @@ class _FilterSheet extends StatelessWidget {
   }
 }
 
-class RecentScreen extends StatelessWidget {
-  const RecentScreen({super.key, required this.items});
-  final List<(Book, ReadingProgress)> items;
+/// Placeholder shown while the catalog loads, so the layout doesn't jump.
+class _SkeletonCard extends StatelessWidget {
+  const _SkeletonCard();
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Recently Read')),
-        body: GridView.builder(
-          padding: const EdgeInsets.all(20),
-          gridDelegate: recentGridDelegate,
-          itemCount: items.length,
-          itemBuilder: (_, i) => RecentCard(
-            book: items[i].$1,
-            progress: items[i].$2,
-            onTap: () => ReaderScreen.open(context, items[i].$1),
-          ),
+  Widget build(BuildContext context) {
+    Widget bar(double w, double h) => Container(
+          width: w,
+          height: h,
+          decoration: BoxDecoration(color: AppColors.chip, borderRadius: BorderRadius.circular(4)),
+        );
+    return SoftCard(
+      padding: const EdgeInsets.all(10),
+      child: SizedBox(
+        height: 108,
+        child: Row(
+          children: [
+            Container(
+              width: 72,
+              height: 108,
+              decoration: BoxDecoration(color: AppColors.chip, borderRadius: BorderRadius.circular(8)),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 4),
+                  bar(160, 14),
+                  const SizedBox(height: 10),
+                  bar(100, 12),
+                ],
+              ),
+            ),
+          ],
         ),
-      );
+      ),
+    );
+  }
 }

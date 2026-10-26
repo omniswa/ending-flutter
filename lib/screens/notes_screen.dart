@@ -32,12 +32,14 @@ class NotesScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton(
         onPressed: () => _open(context),
+        tooltip: 'New note',
+        elevation: 2,
         backgroundColor: AppColors.sage,
         foregroundColor: Colors.white,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('New note'),
+        shape: const CircleBorder(),
+        child: const Icon(Icons.add_rounded, size: 28),
       ),
       body: SafeArea(
         bottom: false,
@@ -49,8 +51,8 @@ class NotesScreen extends StatelessWidget {
               child: Row(children: [
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('My Notes', style: t.headlineMedium?.copyWith(fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 4),
+                    Text('Notes', style: t.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 2),
                     Text(notes.length == 1 ? '1 note' : '${notes.length} notes', style: t.bodyMedium?.copyWith(color: AppColors.muted)),
                   ]),
                 ),
@@ -59,7 +61,7 @@ class NotesScreen extends StatelessWidget {
             ),
             Expanded(
               child: provider.loading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const Center(child: CircularProgressIndicator(color: AppColors.sage))
                   : notes.isEmpty
                       ? EmptyState(
                           icon: Icons.edit_note_rounded,
@@ -72,12 +74,16 @@ class NotesScreen extends StatelessWidget {
                           padding: const EdgeInsets.fromLTRB(20, 0, 20, 96),
                           gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                             maxCrossAxisExtent: 240,
-                            mainAxisExtent: 190,
-                            mainAxisSpacing: 14,
-                            crossAxisSpacing: 14,
+                            mainAxisExtent: 176,
+                            mainAxisSpacing: 12,
+                            crossAxisSpacing: 12,
                           ),
                           itemCount: notes.length,
-                          itemBuilder: (_, i) => _NoteCard(note: notes[i], onTap: () => _open(context, notes[i].id)),
+                          itemBuilder: (_, i) => _NoteCard(
+                            key: ValueKey(notes[i].id),
+                            note: notes[i],
+                            onTap: () => _open(context, notes[i].id),
+                          ),
                         ),
             ),
           ],
@@ -88,9 +94,16 @@ class NotesScreen extends StatelessWidget {
 }
 
 class _NoteCard extends StatelessWidget {
-  const _NoteCard({required this.note, required this.onTap});
+  const _NoteCard({super.key, required this.note, required this.onTap});
   final Note note;
   final VoidCallback onTap;
+
+  void _delete(BuildContext context) {
+    final provider = context.read<NotesProvider>();
+    final removed = provider.delete(note.id);
+    if (removed == null) return;
+    showUndoSnack(context, 'Deleted "${removed.displayTitle}"', () => provider.save(removed));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -98,31 +111,48 @@ class _NoteCard extends StatelessWidget {
     final color = AppColors.noteColors[note.colorIndex.clamp(0, AppColors.noteColors.length - 1)];
     return SoftCard(
       color: color,
-      radius: 22,
+      radius: 18,
+      padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
       onTap: onTap,
+      onLongPress: () => _delete(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Expanded(child: Text(note.displayTitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: t.titleMedium?.copyWith(fontWeight: FontWeight.w700, height: 1.15))),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(note.displayTitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: t.titleMedium?.copyWith(fontWeight: FontWeight.w700, height: 1.2)),
+              ),
+            ),
             SizedBox(
-              width: 28,
-              height: 28,
+              width: 32,
+              height: 32,
               child: PopupMenuButton<String>(
                 padding: EdgeInsets.zero,
-                icon: const Icon(Icons.more_horiz_rounded, size: 20),
-                onSelected: (_) async {
-                  final notes = context.read<NotesProvider>();
-                  final ok = await confirmDialog(context, title: 'Delete note?', message: '"${note.displayTitle}" will be permanently deleted.', action: 'Delete');
-                  if (ok) notes.delete(note.id);
-                },
-                itemBuilder: (_) => const [PopupMenuItem(value: 'delete', child: Text('Delete'))],
+                tooltip: 'More',
+                icon: const Icon(Icons.more_horiz_rounded, size: 20, color: AppColors.muted),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                onSelected: (_) => _delete(context),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Row(children: [
+                      Icon(Icons.delete_outline_rounded, size: 20, color: AppColors.danger),
+                      SizedBox(width: 12),
+                      Text('Delete'),
+                    ]),
+                  ),
+                ],
               ),
             ),
           ]),
           const SizedBox(height: 6),
           Expanded(
-            child: Text(note.body.trim(), overflow: TextOverflow.fade, style: t.bodySmall?.copyWith(color: AppColors.ink.withValues(alpha: 0.75), height: 1.35)),
+            child: Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Text(note.body.trim(), overflow: TextOverflow.fade, style: t.bodySmall?.copyWith(color: AppColors.ink.withValues(alpha: 0.72), height: 1.4)),
+            ),
           ),
           Text(formatDate(note.updatedAt), style: t.labelSmall?.copyWith(color: AppColors.muted)),
         ],
