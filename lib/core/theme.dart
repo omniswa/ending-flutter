@@ -35,8 +35,9 @@ abstract final class AppTheme {
           onSurface: AppColors.ink,
         );
     final base = ThemeData(useMaterial3: true, colorScheme: scheme);
-    final text = base.textTheme.apply(
-      fontFamily: GoogleFonts.outfit().fontFamily,
+    // outfitTextTheme loads each weight's real font file; applying only the
+    // regular family name would fake bold for every w600-w800 style.
+    final text = GoogleFonts.outfitTextTheme(base.textTheme).apply(
       bodyColor: AppColors.ink,
       displayColor: AppColors.ink,
     );

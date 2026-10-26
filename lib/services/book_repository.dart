@@ -80,14 +80,19 @@ class BookRepository {
       throw HttpException('Download failed (${res.statusCode})');
     }
     final chapters = await compute(_extractChapters, res.bodyBytes);
-    if (dir.existsSync()) await dir.delete(recursive: true);
-    await dir.create(recursive: true);
+    // Write into a sibling temp dir and rename, so a crash or kill mid-write
+    // can never leave a truncated book that looks complete on the next open.
+    final tmp = Directory('${dir.path}.tmp');
+    if (tmp.existsSync()) await tmp.delete(recursive: true);
+    await tmp.create(recursive: true);
     try {
       for (final e in chapters.entries) {
-        await File(p.join(dir.path, e.key)).writeAsString(e.value, flush: true);
+        await File(p.join(tmp.path, e.key)).writeAsString(e.value, flush: true);
       }
+      if (dir.existsSync()) await dir.delete(recursive: true);
+      await tmp.rename(dir.path);
     } on Object {
-      await dir.delete(recursive: true); // never leave a half-written book
+      if (tmp.existsSync()) await tmp.delete(recursive: true);
       rethrow;
     }
   }

@@ -7,7 +7,7 @@ abstract final class AppConfig {
   /// Override: `--dart-define=BASE_URL=https://example.com/`
   static const baseUrl = String.fromEnvironment(
     'BASE_URL',
-    defaultValue: 'https://omniswa.github.io/ending-web-draft1/books.json',
+    defaultValue: 'https://omniswa.github.io/ending-web-draft1/',
   );
   static const booksIndex = 'books.json';
   static const requestTimeout = Duration(seconds: 20);
