@@ -144,7 +144,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ]),
                   const SizedBox(height: 4),
                   Text(AppConfig.tagline,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(letterSpacing: 2.2, color: AppColors.muted)),
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(fontSize: 12, letterSpacing: 2.2, color: AppColors.muted)),
                 ],
               ),
             ),

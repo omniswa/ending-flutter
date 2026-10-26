@@ -16,18 +16,44 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        body: IndexedStack(
-          index: _index,
-          children: const [HomeScreen(), NotesScreen(), FavoritesScreen()],
+      body: IndexedStack(
+        index: _index,
+        children: const [
+          HomeScreen(),
+          NotesScreen(),
+          FavoritesScreen(),
+        ],
+      ),
+      bottomNavigationBar: NavigationBarTheme(
+        data: NavigationBarThemeData(
+          labelTextStyle: WidgetStateProperty.resolveWith<TextStyle>(
+            (states) => const TextStyle(
+              fontSize: 10, // Adjust label font size
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         ),
-        bottomNavigationBar: NavigationBar(
+        child: NavigationBar(
           selectedIndex: _index,
           onDestinationSelected: (i) => setState(() => _index = i),
           destinations: const [
-            NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: 'HOME'),
-            NavigationDestination(icon: Icon(Icons.edit_note_outlined), selectedIcon: Icon(Icons.edit_note_rounded), label: 'MY NOTES'),
-            NavigationDestination(icon: Icon(Icons.star_outline_rounded), selectedIcon: Icon(Icons.star_rounded), label: 'FAVORITES'),
+            NavigationDestination(
+              icon: Icon(Icons.home_outlined),
+              selectedIcon: Icon(Icons.home_rounded),
+              label: 'HOME',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.edit_note_outlined),
+              selectedIcon: Icon(Icons.edit_note_rounded),
+              label: 'MY NOTES',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.star_outline_rounded),
+              selectedIcon: Icon(Icons.star_rounded),
+              label: 'FAVORITES',
+            ),
           ],
         ),
-      );
+      ),
+    );
 }
