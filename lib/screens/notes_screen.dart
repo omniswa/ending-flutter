@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
-import '../core/formatters.dart';
 import '../core/theme.dart';
 import '../models/note.dart';
 import '../providers/notes_provider.dart';
 import '../widgets/common.dart';
+import '../widgets/note_export.dart';
 import 'note_editor_screen.dart';
 
 class NotesScreen extends StatelessWidget {
@@ -71,7 +72,7 @@ class NotesScreen extends StatelessWidget {
                           padding: const EdgeInsets.fromLTRB(20, 20, 20, 96),
                           gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                             maxCrossAxisExtent: 240,
-                            mainAxisExtent: 176,
+                            mainAxisExtent: 196,
                             mainAxisSpacing: 12,
                             crossAxisSpacing: 12,
                           ),
@@ -106,10 +107,11 @@ class _NoteCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     final color = AppColors.noteColors[note.colorIndex.clamp(0, AppColors.noteColors.length - 1)];
+    final words = note.wordCount;
     return SoftCard(
       color: color,
-      radius: 18,
-      padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
+      radius: 22,
+      padding: const EdgeInsets.fromLTRB(16, 14, 6, 12),
       onTap: onTap,
       onLongPress: () => _delete(context),
       child: Column(
@@ -118,8 +120,19 @@ class _NoteCard extends StatelessWidget {
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(note.displayTitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: t.titleMedium?.copyWith(fontWeight: FontWeight.w700, height: 1.2)),
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  note.displayTitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.fraunces(
+                    textStyle: t.titleMedium,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -0.2,
+                    height: 1.2,
+                    color: AppColors.ink,
+                  ),
+                ),
               ),
             ),
             SizedBox(
@@ -130,8 +143,19 @@ class _NoteCard extends StatelessWidget {
                 tooltip: 'More',
                 icon: const Icon(Icons.more_horiz_rounded, size: 20, color: AppColors.muted),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                onSelected: (_) => _delete(context),
+                onSelected: (v) {
+                  if (v == 'export') exportNote(context, title: note.title, body: note.body);
+                  if (v == 'delete') _delete(context);
+                },
                 itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: 'export',
+                    child: Row(children: [
+                      Icon(Icons.ios_share_rounded, size: 20),
+                      SizedBox(width: 12),
+                      Text('Export'),
+                    ]),
+                  ),
                   PopupMenuItem(
                     value: 'delete',
                     child: Row(children: [
@@ -147,11 +171,31 @@ class _NoteCard extends StatelessWidget {
           const SizedBox(height: 6),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: Text(note.body.trim(), overflow: TextOverflow.fade, style: t.bodySmall?.copyWith(color: AppColors.ink.withValues(alpha: 0.72), height: 1.4)),
+              padding: const EdgeInsets.only(right: 10),
+              child: Text(
+                note.body.trim(),
+                overflow: TextOverflow.fade,
+                style: t.bodySmall?.copyWith(color: AppColors.ink.withValues(alpha: 0.7), height: 1.45),
+              ),
             ),
           ),
-          Text(formatDate(note.updatedAt), style: t.labelSmall?.copyWith(color: AppColors.muted)),
+          Padding(
+            padding: const EdgeInsets.only(right: 10, top: 6),
+            child: Row(children: [
+              Icon(Icons.schedule_rounded, size: 12, color: AppColors.ink.withValues(alpha: 0.45)),
+              const SizedBox(width: 4),
+              Text(formatShortDate(note.updatedAt), style: t.labelSmall?.copyWith(color: AppColors.ink.withValues(alpha: 0.55))),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(color: AppColors.ink.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(10)),
+                child: Text(
+                  '$words ${words == 1 ? 'word' : 'words'}',
+                  style: t.labelSmall?.copyWith(color: AppColors.ink.withValues(alpha: 0.6), fontWeight: FontWeight.w600),
+                ),
+              ),
+            ]),
+          ),
         ],
       ),
     );

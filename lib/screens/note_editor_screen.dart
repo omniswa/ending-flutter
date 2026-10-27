@@ -7,6 +7,7 @@ import '../core/theme.dart';
 import '../models/note.dart';
 import '../providers/notes_provider.dart';
 import '../widgets/common.dart';
+import '../widgets/note_export.dart';
 
 class NoteEditorScreen extends StatefulWidget {
   const NoteEditorScreen({super.key, this.noteId});
@@ -21,7 +22,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   late final TextEditingController _title;
   late final TextEditingController _body;
   Note? _note;
-  int _color = 0;
+  int _color = Note.defaultColorIndex;
   Timer? _debounce;
   bool _deleted = false;
 
@@ -30,7 +31,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     super.initState();
     _notes = context.read<NotesProvider>();
     _note = widget.noteId == null ? null : _notes.byId(widget.noteId!);
-    _color = _note?.colorIndex ?? 0;
+    _color = (_note?.colorIndex ?? Note.defaultColorIndex).clamp(0, AppColors.noteColors.length - 1);
     _title = TextEditingController(text: _note?.title ?? '');
     _body = TextEditingController(text: _note?.body ?? '');
     _title.addListener(_onChanged);
@@ -92,6 +93,11 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
         appBar: AppBar(
           backgroundColor: bg,
           actions: [
+            IconButton(
+              onPressed: () => exportNote(context, title: _title.text, body: _body.text),
+              icon: const Icon(Icons.ios_share_rounded),
+              tooltip: 'Export',
+            ),
             if (_note != null) IconButton(onPressed: _delete, icon: const Icon(Icons.delete_outline_rounded), tooltip: 'Delete'),
             IconButton(onPressed: () => Navigator.maybePop(context), icon: const Icon(Icons.check_rounded), tooltip: 'Done'),
           ],
@@ -122,7 +128,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   child: Row(children: [
-                    for (var i = 0; i < AppColors.noteColors.length; i++)
+                    for (final i in AppColors.noteColorOrder)
                       GestureDetector(
                         onTap: () {
                           setState(() => _color = i);

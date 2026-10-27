@@ -3,12 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../core/config.dart';
-import '../core/formatters.dart';
 import '../core/theme.dart';
 import '../models/book.dart';
 import '../models/reading_progress.dart';
 import '../providers/library_provider.dart';
 import '../providers/user_data_provider.dart';
+import '../widgets/book_card.dart';
 import '../widgets/common.dart';
 import '../widgets/recent_card.dart';
 import 'reader_screen.dart';
@@ -207,56 +207,29 @@ class _LibraryCard extends StatelessWidget {
   final VoidCallback onFavorite;
 
   @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    final p = progress;
-    return SoftCard(
-      padding: const EdgeInsets.all(10),
-      onTap: () => ReaderScreen.open(context, book),
-      child: SizedBox(
-        height: 108,
-        child: Row(
-          children: [
-            BookCover(url: book.cover, width: 72, height: 108),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(book.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: t.titleMedium?.copyWith(fontWeight: FontWeight.w700, height: 1.2)),
-                  const SizedBox(height: 2),
-                  Text(book.author, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.bodyMedium?.copyWith(color: AppColors.muted)),
-                  const Spacer(),
-                  if (p != null && p.percent > 0) ...[
-                    ProgressBar(value: p.percent),
-                    const SizedBox(height: 5),
-                    Text('${formatPercent(p.percent)} · ${formatTimeLeft(p.minutesLeft)}', style: t.labelSmall?.copyWith(color: AppColors.muted)),
-                  ] else
-                    Text('Added ${formatDate(book.added)}', style: t.labelSmall?.copyWith(color: AppColors.muted)),
-                ],
-              ),
+  Widget build(BuildContext context) => BookCard(
+        book: book,
+        progress: progress,
+        onTap: () => ReaderScreen.open(context, book),
+        trailing: IconButton(
+          tooltip: favorite ? 'Remove from favorites' : 'Add to favorites',
+          onPressed: onFavorite,
+          style: IconButton.styleFrom(
+            backgroundColor: favorite ? AppColors.terracottaSoft : AppColors.chip,
+            fixedSize: const Size(38, 38),
+          ),
+          icon: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 180),
+            transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
+            child: Icon(
+              favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+              key: ValueKey(favorite),
+              size: 20,
+              color: favorite ? AppColors.terracotta : AppColors.muted,
             ),
-            Align(
-              alignment: Alignment.topCenter,
-              child: IconButton(
-                tooltip: favorite ? 'Remove from favorites' : 'Add to favorites',
-                onPressed: onFavorite,
-                icon: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 180),
-                  transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
-                  child: Icon(
-                    favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                    key: ValueKey(favorite),
-                    color: favorite ? AppColors.terracotta : AppColors.muted,
-                  ),
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
-      ),
-    );
-  }
+      );
 }
 
 /// Placeholder shown while the catalog loads, so the layout doesn't jump.
@@ -271,9 +244,10 @@ class _SkeletonCard extends StatelessWidget {
           decoration: BoxDecoration(color: AppColors.chip, borderRadius: BorderRadius.circular(4)),
         );
     return SoftCard(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(14),
+      radius: 24,
       child: SizedBox(
-        height: 108,
+        height: BookCard.height - 28,
         child: Row(
           children: [
             Container(

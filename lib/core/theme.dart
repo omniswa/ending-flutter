@@ -44,6 +44,9 @@ abstract final class AppColors {
     Color(0xFFEDE3F2),
     Color(0xFFFFFFFF),
   ];
+
+  /// Order the swatches appear in the note editor: white first.
+  static const noteColorOrder = <int>[5, 0, 1, 2, 3, 4];
 }
 
 abstract final class AppTheme {

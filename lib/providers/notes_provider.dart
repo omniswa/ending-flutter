@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -6,6 +7,15 @@ import 'package:path/path.dart' as p;
 
 import '../models/note.dart';
 import '../services/local_store.dart';
+
+enum NoteExportFormat {
+  text('Plain text', '.txt'),
+  markdown('Markdown', '.md');
+
+  const NoteExportFormat(this.label, this.extension);
+  final String label;
+  final String extension;
+}
 
 class NotesProvider extends ChangeNotifier {
   NotesProvider(this._store) {
@@ -73,6 +83,35 @@ class NotesProvider extends ChangeNotifier {
     }
     if (count > 0) _persist();
     return count;
+  }
+
+  /// Saves one note to a file the person picks. Returns false if they cancel.
+  Future<bool> exportNote({
+    required String title,
+    required String body,
+    required NoteExportFormat format,
+  }) async {
+    final heading = title.trim();
+    final text = StringBuffer();
+    if (heading.isNotEmpty) {
+      text.write(format == NoteExportFormat.markdown ? '# $heading' : heading);
+      text.write('\n\n');
+    }
+    text.write(body.trimRight());
+    text.write('\n');
+
+    final safe = heading
+        .replaceAll(RegExp(r'[\\/:*?"<>|\x00-\x1F]'), '_')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    final name = safe.isEmpty ? 'note' : safe;
+
+    final saved = await FilePicker.saveFile(
+      dialogTitle: 'Export note',
+      fileName: '$name${format.extension}',
+      bytes: Uint8List.fromList(utf8.encode(text.toString())),
+    );
+    return saved != null;
   }
 
   void _persist() {

@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../core/formatters.dart';
 import '../core/theme.dart';
 import '../models/book.dart';
 import '../models/favorite_entry.dart';
 import '../models/reading_progress.dart';
 import '../providers/library_provider.dart';
 import '../providers/user_data_provider.dart';
+import '../widgets/book_card.dart';
 import '../widgets/common.dart';
 import 'reader_screen.dart';
 
@@ -169,7 +169,6 @@ class _FavoriteCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = context.read<UserDataProvider>();
-    final t = Theme.of(context).textTheme;
     final book = item.book;
     final finished = item.entry.finished;
     final p = item.progress;
@@ -184,69 +183,37 @@ class _FavoriteCard extends StatelessWidget {
         child: const Icon(Icons.favorite_border_rounded, color: Colors.white),
       ),
       onDismissed: (_) => _remove(context, user),
-      child: SoftCard(
-        padding: const EdgeInsets.all(10),
+      child: BookCard(
+        book: book,
+        progress: p,
+        finished: finished,
         onTap: () => ReaderScreen.open(context, book),
-        child: SizedBox(
-          height: 108,
-          child: Row(
-            children: [
-              BookCover(url: book.cover, width: 72, height: 108),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(book.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: t.titleMedium?.copyWith(fontWeight: FontWeight.w700, height: 1.2)),
-                    const SizedBox(height: 2),
-                    Text(book.author, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.bodyMedium?.copyWith(color: AppColors.muted)),
-                    const Spacer(),
-                    if (finished)
-                      Row(mainAxisSize: MainAxisSize.min, children: [
-                        const Icon(Icons.check_circle_rounded, size: 16, color: AppColors.sage),
-                        const SizedBox(width: 4),
-                        Text('Finished', style: t.labelMedium?.copyWith(color: AppColors.sage, fontWeight: FontWeight.w700)),
-                      ])
-                    else if (p != null && p.percent > 0) ...[
-                      ProgressBar(value: p.percent),
-                      const SizedBox(height: 5),
-                      Text('${formatPercent(p.percent)} · ${formatTimeLeft(p.minutesLeft)}', style: t.labelSmall?.copyWith(color: AppColors.muted)),
-                    ] else
-                      Text('Not started', style: t.labelSmall?.copyWith(color: AppColors.muted)),
-                  ],
-                ),
-              ),
-              Align(
-                alignment: Alignment.topCenter,
-                child: PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_horiz_rounded, color: AppColors.muted),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  onSelected: (v) {
-                    if (v == 'finish') user.setFinished(book.id, finished: !finished);
-                    if (v == 'remove') _remove(context, user);
-                  },
-                  itemBuilder: (_) => [
-                    PopupMenuItem(
-                      value: 'finish',
-                      child: Row(children: [
-                        Icon(finished ? Icons.undo_rounded : Icons.check_circle_outline_rounded, size: 20),
-                        const SizedBox(width: 12),
-                        Text(finished ? 'Mark as reading' : 'Mark as finished'),
-                      ]),
-                    ),
-                    const PopupMenuItem(
-                      value: 'remove',
-                      child: Row(children: [
-                        Icon(Icons.favorite_border_rounded, size: 20, color: AppColors.danger),
-                        SizedBox(width: 12),
-                        Text('Remove'),
-                      ]),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+        trailing: PopupMenuButton<String>(
+          icon: const Icon(Icons.more_horiz_rounded, color: AppColors.muted),
+          style: IconButton.styleFrom(backgroundColor: AppColors.chip, fixedSize: const Size(38, 38)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          onSelected: (v) {
+            if (v == 'finish') user.setFinished(book.id, finished: !finished);
+            if (v == 'remove') _remove(context, user);
+          },
+          itemBuilder: (_) => [
+            PopupMenuItem(
+              value: 'finish',
+              child: Row(children: [
+                Icon(finished ? Icons.undo_rounded : Icons.check_circle_outline_rounded, size: 20),
+                const SizedBox(width: 12),
+                Text(finished ? 'Mark as reading' : 'Mark as finished'),
+              ]),
+            ),
+            const PopupMenuItem(
+              value: 'remove',
+              child: Row(children: [
+                Icon(Icons.favorite_border_rounded, size: 20, color: AppColors.danger),
+                SizedBox(width: 12),
+                Text('Remove'),
+              ]),
+            ),
+          ],
         ),
       ),
     );
