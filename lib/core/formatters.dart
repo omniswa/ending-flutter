@@ -5,6 +5,9 @@ const _months = [
 
 String formatDate(DateTime d) => '${_months[d.month - 1]} ${d.day}, ${d.year}';
 
+/// "Oct 27" — compact form for tight spaces.
+String formatShortDate(DateTime d) => '${_months[d.month - 1].substring(0, 3)} ${d.day}';
+
 /// Parses dates like "October 1, 2026". Returns null when malformed.
 DateTime? parseLongDate(String input) {
   final m = RegExp(r'^([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})$').firstMatch(input.trim());

@@ -238,17 +238,19 @@ class ScreenHeader extends StatelessWidget {
 
 /// Thin reading-progress bar used on book cards.
 class ProgressBar extends StatelessWidget {
-  const ProgressBar({super.key, required this.value});
+  const ProgressBar({super.key, required this.value, this.color = AppColors.terracotta, this.minHeight = 4});
   final double value;
+  final Color color;
+  final double minHeight;
 
   @override
   Widget build(BuildContext context) => ClipRRect(
-        borderRadius: BorderRadius.circular(3),
+        borderRadius: BorderRadius.circular(minHeight),
         child: LinearProgressIndicator(
           value: value.clamp(0.02, 1.0).toDouble(),
-          minHeight: 4,
+          minHeight: minHeight,
           backgroundColor: AppColors.chip,
-          color: AppColors.terracotta,
+          color: color,
         ),
       );
 }

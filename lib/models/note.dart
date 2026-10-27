@@ -2,19 +2,22 @@ import 'package:flutter/foundation.dart';
 
 @immutable
 class Note {
+  /// Index into AppColors.noteColors; 5 is white.
+  static const defaultColorIndex = 5;
+
   const Note({
     required this.id,
     required this.title,
     required this.body,
     required this.createdAt,
     required this.updatedAt,
-    this.colorIndex = 0,
+    this.colorIndex = defaultColorIndex,
   });
 
   factory Note.create({
     String title = '',
     String body = '',
-    int colorIndex = 0,
+    int colorIndex = defaultColorIndex,
     String? id,
   }) {
     final now = DateTime.now();
@@ -34,7 +37,7 @@ class Note {
         body: j['body'] as String? ?? '',
         createdAt: DateTime.parse(j['createdAt'] as String),
         updatedAt: DateTime.parse(j['updatedAt'] as String),
-        colorIndex: j['colorIndex'] as int? ?? 0,
+        colorIndex: j['colorIndex'] as int? ?? defaultColorIndex,
       );
 
   final String id;
