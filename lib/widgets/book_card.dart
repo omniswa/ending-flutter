@@ -44,20 +44,42 @@ class BookCard extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     final p = progress;
     final started = p != null && p.percent > 0;
-    final isNew = !started && !finished && DateTime.now().difference(book.added).inDays.abs() <= 14;
+    final isNew =
+        !started &&
+        !finished &&
+        DateTime.now().difference(book.added).inDays.abs() <= 14;
     final stage = _stages[book.id.abs() % _stages.length];
 
     final _Status status = finished
-        ? const _Status('Finished', Icons.check_circle_rounded, AppColors.sageSoft, AppColors.sage)
+        ? const _Status(
+            'Finished',
+            Icons.check_circle_rounded,
+            AppColors.sageSoft,
+            AppColors.sage,
+          )
         : started
-            ? const _Status('Reading', Icons.auto_stories_rounded, AppColors.terracottaSoft, AppColors.terracotta)
-            : isNew
-                ? const _Status('New', Icons.auto_awesome_rounded, AppColors.sage, Colors.white)
-                : const _Status('Not started', Icons.bookmark_border_rounded, AppColors.chip, AppColors.muted);
+        ? const _Status(
+            'Reading',
+            Icons.auto_stories_rounded,
+            AppColors.terracottaSoft,
+            AppColors.terracotta,
+          )
+        : isNew
+        ? const _Status(
+            'New',
+            Icons.auto_awesome_rounded,
+            AppColors.sage,
+            Colors.white,
+          )
+        : const _Status(
+            'Not started',
+            Icons.bookmark_border_rounded,
+            AppColors.chip,
+            AppColors.muted,
+          );
 
     return SoftCard(
       padding: EdgeInsets.zero,
-      radius: 24,
       onTap: onTap,
       child: SizedBox(
         height: height,
@@ -66,28 +88,32 @@ class BookCard extends StatelessWidget {
             Container(
               width: _stageWidth,
               decoration: BoxDecoration(
-                gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: stage),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: stage,
+                ),
               ),
               child: Stack(
                 alignment: Alignment.center,
                 clipBehavior: Clip.hardEdge,
                 children: [
                   Positioned(
-                    left: -22,
-                    bottom: -22,
                     child: Container(
-                      width: 70,
-                      height: 70,
-                      decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: 0.35)),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withValues(alpha: 0.35),
+                      ),
                     ),
                   ),
                   Positioned(
-                    right: -14,
-                    top: -14,
                     child: Container(
                       width: 40,
                       height: 40,
-                      decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: 0.25)),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withValues(alpha: 0.25),
+                      ),
                     ),
                   ),
                   BookCover(url: book.cover, width: 72, height: 108),
@@ -115,13 +141,26 @@ class BookCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 3),
-                    Row(children: [
-                      const Icon(Icons.person_outline_rounded, size: 14, color: AppColors.muted),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(book.author, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.bodySmall?.copyWith(color: AppColors.muted)),
-                      ),
-                    ]),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.person_outline_rounded,
+                          size: 14,
+                          color: AppColors.muted,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            book.author,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: t.bodySmall?.copyWith(
+                              color: AppColors.muted,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                     const Spacer(),
                     _footer(t, p, started),
                   ],
@@ -131,7 +170,10 @@ class BookCard extends StatelessWidget {
             if (trailing != null)
               Align(
                 alignment: Alignment.topCenter,
-                child: Padding(padding: const EdgeInsets.fromLTRB(0, 8, 8, 0), child: trailing),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(0, 8, 8, 0),
+                  child: trailing,
+                ),
               )
             else
               const SizedBox(width: 10),
@@ -143,34 +185,70 @@ class BookCard extends StatelessWidget {
 
   Widget _footer(TextTheme t, ReadingProgress? p, bool started) {
     if (finished) {
-      return Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-        const ProgressBar(value: 1, color: AppColors.sage, minHeight: 6),
-        const SizedBox(height: 5),
-        Text('Completed', style: t.labelSmall?.copyWith(color: AppColors.sage, fontWeight: FontWeight.w700)),
-      ]);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const ProgressBar(value: 1, color: AppColors.sage, minHeight: 6),
+          const SizedBox(height: 5),
+          Text(
+            'Completed',
+            style: t.labelSmall?.copyWith(
+              color: AppColors.sage,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      );
     }
     if (started) {
-      return Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-        ProgressBar(value: p!.percent, minHeight: 6),
-        const SizedBox(height: 5),
-        Text.rich(
-          TextSpan(children: [
-            TextSpan(text: formatPercent(p.percent), style: const TextStyle(color: AppColors.terracotta, fontWeight: FontWeight.w800)),
-            TextSpan(text: '  ·  ${formatTimeLeft(p.minutesLeft)}', style: const TextStyle(color: AppColors.muted)),
-          ]),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: t.labelSmall,
-        ),
-      ]);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ProgressBar(value: p!.percent, minHeight: 6),
+          const SizedBox(height: 5),
+          Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(
+                  text: formatPercent(p.percent),
+                  style: const TextStyle(
+                    color: AppColors.terracotta,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                TextSpan(
+                  text: '  ·  ${formatTimeLeft(p.minutesLeft)}',
+                  style: const TextStyle(color: AppColors.muted),
+                ),
+              ],
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: t.labelSmall,
+          ),
+        ],
+      );
     }
-    return Row(children: [
-      const Icon(Icons.calendar_today_rounded, size: 12, color: AppColors.muted),
-      const SizedBox(width: 5),
-      Expanded(
-        child: Text('Added ${formatDate(book.added)}', maxLines: 1, overflow: TextOverflow.ellipsis, style: t.labelSmall?.copyWith(color: AppColors.muted)),
-      ),
-    ]);
+    return Row(
+      children: [
+        const Icon(
+          Icons.calendar_today_rounded,
+          size: 12,
+          color: AppColors.muted,
+        ),
+        const SizedBox(width: 5),
+        Expanded(
+          child: Text(
+            'Added ${formatDate(book.added)}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: t.labelSmall?.copyWith(color: AppColors.muted),
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -188,16 +266,26 @@ class _StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        height: 22,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        decoration: BoxDecoration(color: status.background, borderRadius: BorderRadius.circular(11)),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(status.icon, size: 12, color: status.foreground),
-          const SizedBox(width: 4),
-          Text(
-            status.label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(color: status.foreground, fontWeight: FontWeight.w700, letterSpacing: 0.2),
+    height: 22,
+    padding: const EdgeInsets.symmetric(horizontal: 8),
+    decoration: BoxDecoration(
+      color: status.background,
+      borderRadius: BorderRadius.circular(11),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(status.icon, size: 12, color: status.foreground),
+        const SizedBox(width: 4),
+        Text(
+          status.label,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: status.foreground,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.2,
           ),
-        ]),
-      );
+        ),
+      ],
+    ),
+  );
 }

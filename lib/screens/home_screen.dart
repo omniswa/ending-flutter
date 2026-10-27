@@ -84,13 +84,16 @@ class _HomeScreenState extends State<HomeScreen> {
               child: SectionTitle(
                 searching ? 'Results' : 'Library',
                 trailing: lib.state == LoadState.ready
-                    ? Text(books.length == 1 ? '1 book' : '${books.length} books',
-                        style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.muted))
+                    ? Text(
+                        books.length == 1 ? '1 book' : '${books.length} books',
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(color: AppColors.muted),
+                      )
                     : null,
               ),
             ),
             ..._librarySlivers(lib, user, books),
-            const SliverToBoxAdapter(child: SizedBox(height: 32)),
+            const SliverToBoxAdapter(child: SizedBox(height: 24)),
           ],
         ),
       ),
@@ -105,37 +108,53 @@ class _HomeScreenState extends State<HomeScreen> {
       bottom: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.18), blurRadius: 16, offset: const Offset(0, 6))],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.18),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
         child: TextField(
-            controller: _search,
-            textInputAction: TextInputAction.search,
-            onChanged: lib.setQuery,
-            decoration: InputDecoration(
-              hintText: 'Search titles or authors',
-              hintStyle: const TextStyle(color: AppColors.muted),
-              prefixIcon: const Icon(Icons.search_rounded, color: AppColors.muted),
-              suffixIcon: ValueListenableBuilder<TextEditingValue>(
-                valueListenable: _search,
-                builder: (_, v, __) => v.text.isEmpty
-                    ? const SizedBox.shrink()
-                    : IconButton(
-                        tooltip: 'Clear',
-                        icon: const Icon(Icons.close_rounded, size: 20),
-                        onPressed: () => _clearSearch(lib),
-                      ),
-              ),
-              filled: true,
-              fillColor: AppColors.surface,
-              contentPadding: const EdgeInsets.symmetric(vertical: 15),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
+          controller: _search,
+          textInputAction: TextInputAction.search,
+          onChanged: lib.setQuery,
+          decoration: InputDecoration(
+            hintText: 'Search titles or authors',
+            hintStyle: const TextStyle(color: AppColors.muted),
+            prefixIcon: const Icon(
+              Icons.search_rounded,
+              color: AppColors.muted,
+            ),
+            suffixIcon: ValueListenableBuilder<TextEditingValue>(
+              valueListenable: _search,
+              builder: (_, v, __) => v.text.isEmpty
+                  ? const SizedBox.shrink()
+                  : IconButton(
+                      tooltip: 'Clear',
+                      icon: const Icon(Icons.close_rounded, size: 20),
+                      onPressed: () => _clearSearch(lib),
+                    ),
+            ),
+            filled: true,
+            fillColor: AppColors.surface,
+            contentPadding: const EdgeInsets.symmetric(vertical: 15),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(18),
+              borderSide: BorderSide.none,
             ),
           ),
+        ),
       ),
     );
   }
 
-  List<Widget> _librarySlivers(LibraryProvider lib, UserDataProvider user, List<Book> books) {
+  List<Widget> _librarySlivers(
+    LibraryProvider lib,
+    UserDataProvider user,
+    List<Book> books,
+  ) {
     switch (lib.state) {
       case LoadState.loading:
         return [
@@ -143,7 +162,7 @@ class _HomeScreenState extends State<HomeScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             sliver: SliverList.separated(
               itemCount: 4,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              separatorBuilder: (_, __) => const SizedBox(height: 14),
               itemBuilder: (_, __) => const _SkeletonCard(),
             ),
           ),
@@ -181,7 +200,7 @@ class _HomeScreenState extends State<HomeScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             sliver: SliverList.separated(
               itemCount: books.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              separatorBuilder: (_, __) => const SizedBox(height: 14),
               itemBuilder: (_, i) => _LibraryCard(
                 key: ValueKey(books[i].id),
                 book: books[i],
@@ -200,7 +219,13 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _LibraryCard extends StatelessWidget {
-  const _LibraryCard({super.key, required this.book, required this.progress, required this.favorite, required this.onFavorite});
+  const _LibraryCard({
+    super.key,
+    required this.book,
+    required this.progress,
+    required this.favorite,
+    required this.onFavorite,
+  });
   final Book book;
   final ReadingProgress? progress;
   final bool favorite;
@@ -208,28 +233,29 @@ class _LibraryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => BookCard(
-        book: book,
-        progress: progress,
-        onTap: () => ReaderScreen.open(context, book),
-        trailing: IconButton(
-          tooltip: favorite ? 'Remove from favorites' : 'Add to favorites',
-          onPressed: onFavorite,
-          style: IconButton.styleFrom(
-            backgroundColor: favorite ? AppColors.terracottaSoft : AppColors.chip,
-            fixedSize: const Size(38, 38),
-          ),
-          icon: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 180),
-            transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
-            child: Icon(
-              favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-              key: ValueKey(favorite),
-              size: 20,
-              color: favorite ? AppColors.terracotta : AppColors.muted,
-            ),
-          ),
+    book: book,
+    progress: progress,
+    onTap: () => ReaderScreen.open(context, book),
+    trailing: IconButton(
+      tooltip: favorite ? 'Remove from favorites' : 'Add to favorites',
+      onPressed: onFavorite,
+      style: IconButton.styleFrom(
+        backgroundColor: favorite ? AppColors.terracottaSoft : AppColors.chip,
+        fixedSize: const Size(38, 38),
+      ),
+      icon: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 180),
+        transitionBuilder: (child, anim) =>
+            ScaleTransition(scale: anim, child: child),
+        child: Icon(
+          favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+          key: ValueKey(favorite),
+          size: 20,
+          color: favorite ? AppColors.terracotta : AppColors.muted,
         ),
-      );
+      ),
+    ),
+  );
 }
 
 /// Placeholder shown while the catalog loads, so the layout doesn't jump.
@@ -239,10 +265,13 @@ class _SkeletonCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget bar(double w, double h) => Container(
-          width: w,
-          height: h,
-          decoration: BoxDecoration(color: AppColors.chip, borderRadius: BorderRadius.circular(4)),
-        );
+      width: w,
+      height: h,
+      decoration: BoxDecoration(
+        color: AppColors.chip,
+        borderRadius: BorderRadius.circular(4),
+      ),
+    );
     return SoftCard(
       padding: const EdgeInsets.all(14),
       radius: 24,
@@ -253,7 +282,10 @@ class _SkeletonCard extends StatelessWidget {
             Container(
               width: 72,
               height: 108,
-              decoration: BoxDecoration(color: AppColors.chip, borderRadius: BorderRadius.circular(8)),
+              decoration: BoxDecoration(
+                color: AppColors.chip,
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             const SizedBox(width: 14),
             Expanded(

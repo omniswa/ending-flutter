@@ -1,3 +1,4 @@
+import 'package:ending/core/formatters.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -16,14 +17,20 @@ class NotesScreen extends StatelessWidget {
     final messenger = ScaffoldMessenger.of(context);
     try {
       final n = await context.read<NotesProvider>().importFiles();
-      if (n > 0) messenger.showSnackBar(SnackBar(content: Text('Imported $n ${n == 1 ? 'note' : 'notes'}')));
+      if (n > 0)
+        messenger.showSnackBar(
+          SnackBar(content: Text('Imported $n ${n == 1 ? 'note' : 'notes'}')),
+        );
     } on Object {
-      messenger.showSnackBar(const SnackBar(content: Text('Couldn\'t import that file.')));
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Couldn\'t import that file.')),
+      );
     }
   }
 
-  void _open(BuildContext context, [String? id]) =>
-      Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => NoteEditorScreen(noteId: id)));
+  void _open(BuildContext context, [String? id]) => Navigator.of(
+    context,
+  ).push(MaterialPageRoute<void>(builder: (_) => NoteEditorScreen(noteId: id)));
 
   @override
   Widget build(BuildContext context) {
@@ -59,30 +66,33 @@ class NotesScreen extends StatelessWidget {
             ),
             Expanded(
               child: provider.loading
-                  ? const Center(child: CircularProgressIndicator(color: AppColors.sage))
+                  ? const Center(
+                      child: CircularProgressIndicator(color: AppColors.sage),
+                    )
                   : notes.isEmpty
-                      ? EmptyState(
-                          icon: Icons.edit_note_rounded,
-                          title: 'Your notebook is empty',
-                          message: 'Jot down thoughts while you read, or import text files.',
-                          actionLabel: 'Import notes',
-                          onAction: () => _import(context),
-                        )
-                      : GridView.builder(
-                          padding: const EdgeInsets.fromLTRB(20, 20, 20, 96),
-                          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  ? EmptyState(
+                      icon: Icons.edit_note_rounded,
+                      title: 'Your notebook is empty',
+                      message: 'Jot down thoughts while you read, or import text files.',
+                      actionLabel: 'Import notes',
+                      onAction: () => _import(context),
+                    )
+                  : GridView.builder(
+                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 96),
+                      gridDelegate:
+                          const SliverGridDelegateWithMaxCrossAxisExtent(
                             maxCrossAxisExtent: 240,
                             mainAxisExtent: 196,
                             mainAxisSpacing: 12,
                             crossAxisSpacing: 12,
                           ),
-                          itemCount: notes.length,
-                          itemBuilder: (_, i) => _NoteCard(
-                            key: ValueKey(notes[i].id),
-                            note: notes[i],
-                            onTap: () => _open(context, notes[i].id),
-                          ),
-                        ),
+                      itemCount: notes.length,
+                      itemBuilder: (_, i) => _NoteCard(
+                        key: ValueKey(notes[i].id),
+                        note: notes[i],
+                        onTap: () => _open(context, notes[i].id),
+                      ),
+                    ),
             ),
           ],
         ),
@@ -100,74 +110,97 @@ class _NoteCard extends StatelessWidget {
     final provider = context.read<NotesProvider>();
     final removed = provider.delete(note.id);
     if (removed == null) return;
-    showUndoSnack(context, 'Deleted "${removed.displayTitle}"', () => provider.save(removed));
+    showUndoSnack(
+      context,
+      'Deleted "${removed.displayTitle}"',
+      () => provider.save(removed),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
-    final color = AppColors.noteColors[note.colorIndex.clamp(0, AppColors.noteColors.length - 1)];
+    final color = AppColors
+        .noteColors[note.colorIndex.clamp(0, AppColors.noteColors.length - 1)];
     final words = note.wordCount;
     return SoftCard(
       color: color,
-      radius: 22,
+      radius: 10,
       padding: const EdgeInsets.fromLTRB(16, 14, 6, 12),
       onTap: onTap,
       onLongPress: () => _delete(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text(
-                  note.displayTitle,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.fraunces(
-                    textStyle: t.titleMedium,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: -0.2,
-                    height: 1.2,
-                    color: AppColors.ink,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    note.displayTitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.fraunces(
+                      textStyle: t.titleMedium,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.2,
+                      height: 1.2,
+                      color: AppColors.ink,
+                    ),
                   ),
                 ),
               ),
-            ),
-            SizedBox(
-              width: 32,
-              height: 32,
-              child: PopupMenuButton<String>(
-                padding: EdgeInsets.zero,
-                tooltip: 'More',
-                icon: const Icon(Icons.more_horiz_rounded, size: 20, color: AppColors.muted),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                onSelected: (v) {
-                  if (v == 'export') exportNote(context, title: note.title, body: note.body);
-                  if (v == 'delete') _delete(context);
-                },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(
-                    value: 'export',
-                    child: Row(children: [
-                      Icon(Icons.ios_share_rounded, size: 20),
-                      SizedBox(width: 12),
-                      Text('Export'),
-                    ]),
+              SizedBox(
+                width: 32,
+                height: 32,
+                child: PopupMenuButton<String>(
+                  padding: EdgeInsets.zero,
+                  tooltip: 'More',
+                  icon: const Icon(
+                    Icons.more_horiz_rounded,
+                    size: 20,
+                    color: AppColors.muted,
                   ),
-                  PopupMenuItem(
-                    value: 'delete',
-                    child: Row(children: [
-                      Icon(Icons.delete_outline_rounded, size: 20, color: AppColors.danger),
-                      SizedBox(width: 12),
-                      Text('Delete'),
-                    ]),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                ],
+                  onSelected: (v) {
+                    if (v == 'export')
+                      exportNote(context, title: note.title, body: note.body);
+                    if (v == 'delete') _delete(context);
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: 'export',
+                      child: Row(
+                        children: [
+                          Icon(Icons.ios_share_rounded, size: 20),
+                          SizedBox(width: 12),
+                          Text('Export'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.delete_outline_rounded,
+                            size: 20,
+                            color: AppColors.danger,
+                          ),
+                          SizedBox(width: 12),
+                          Text('Delete'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ]),
+            ],
+          ),
           const SizedBox(height: 6),
           Expanded(
             child: Padding(
@@ -175,26 +208,49 @@ class _NoteCard extends StatelessWidget {
               child: Text(
                 note.body.trim(),
                 overflow: TextOverflow.fade,
-                style: t.bodySmall?.copyWith(color: AppColors.ink.withValues(alpha: 0.7), height: 1.45),
+                style: t.bodySmall?.copyWith(
+                  color: AppColors.ink.withValues(alpha: 0.7),
+                  height: 1.45,
+                ),
               ),
             ),
           ),
           Padding(
             padding: const EdgeInsets.only(right: 10, top: 6),
-            child: Row(children: [
-              Icon(Icons.schedule_rounded, size: 12, color: AppColors.ink.withValues(alpha: 0.45)),
-              const SizedBox(width: 4),
-              Text(formatShortDate(note.updatedAt), style: t.labelSmall?.copyWith(color: AppColors.ink.withValues(alpha: 0.55))),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(color: AppColors.ink.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(10)),
-                child: Text(
-                  '$words ${words == 1 ? 'word' : 'words'}',
-                  style: t.labelSmall?.copyWith(color: AppColors.ink.withValues(alpha: 0.6), fontWeight: FontWeight.w600),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.schedule_rounded,
+                  size: 12,
+                  color: AppColors.ink.withValues(alpha: 0.45),
                 ),
-              ),
-            ]),
+                const SizedBox(width: 4),
+                Text(
+                  formatShortDate(note.updatedAt),
+                  style: t.labelSmall?.copyWith(
+                    color: AppColors.ink.withValues(alpha: 0.55),
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.ink.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '$words ${words == 1 ? 'word' : 'words'}',
+                    style: t.labelSmall?.copyWith(
+                      color: AppColors.ink.withValues(alpha: 0.6),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
