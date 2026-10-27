@@ -21,37 +21,48 @@ class _MainShellState extends State<MainShell> {
           index: _index,
           children: const [
             HomeScreen(),
-            NotesScreen(),
             FavoritesScreen(),
+            NotesScreen(),
           ],
         ),
         bottomNavigationBar: DecoratedBox(
-          decoration: const BoxDecoration(
-            border: Border(top: BorderSide(color: AppColors.line)),
-          ),
-          child: NavigationBar(
-            selectedIndex: _index,
-            onDestinationSelected: (i) {
-              FocusManager.instance.primaryFocus?.unfocus();
-              setState(() => _index = i);
-            },
-            destinations: const [
-              NavigationDestination(
-                icon: Icon(Icons.home_outlined),
-                selectedIcon: Icon(Icons.home_rounded),
-                label: 'Home',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.edit_note_outlined),
-                selectedIcon: Icon(Icons.edit_note_rounded),
-                label: 'Notes',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.favorite_border_rounded),
-                selectedIcon: Icon(Icons.favorite_rounded),
-                label: 'Favorites',
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.ink.withValues(alpha: 0.08),
+                blurRadius: 24,
+                offset: const Offset(0, -6),
               ),
             ],
+          ),
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            child: NavigationBar(
+              selectedIndex: _index,
+              onDestinationSelected: (i) {
+                FocusManager.instance.primaryFocus?.unfocus();
+                setState(() => _index = i);
+              },
+              destinations: const [
+                NavigationDestination(
+                  icon: Icon(Icons.home_outlined),
+                  selectedIcon: Icon(Icons.home_rounded),
+                  label: 'Home',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.favorite_border_rounded),
+                  selectedIcon: Icon(Icons.favorite_rounded),
+                  label: 'Favorites',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.edit_note_outlined),
+                  selectedIcon: Icon(Icons.edit_note_rounded),
+                  label: 'Notes',
+                ),
+              ],
+            ),
           ),
         ),
       );

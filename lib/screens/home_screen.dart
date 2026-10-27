@@ -51,6 +51,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final books = lib.filtered;
 
     return SafeArea(
+      top: false,
       bottom: false,
       child: RefreshIndicator(
         color: AppColors.sage,
@@ -97,15 +98,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _header(BuildContext context, LibraryProvider lib) {
-    final t = Theme.of(context).textTheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(AppConfig.appName, style: t.headlineMedium?.copyWith(fontWeight: FontWeight.w700, letterSpacing: 1.2)),
-          const SizedBox(height: 16),
-          TextField(
+    return ScreenHeader(
+      title: AppConfig.appName,
+      subtitle: AppConfig.tagline,
+      letterSpacing: 1.6,
+      bottom: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.18), blurRadius: 16, offset: const Offset(0, 6))],
+        ),
+        child: TextField(
             controller: _search,
             textInputAction: TextInputAction.search,
             onChanged: lib.setQuery,
@@ -124,12 +126,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
               ),
               filled: true,
-              fillColor: AppColors.chip,
-              contentPadding: const EdgeInsets.symmetric(vertical: 14),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+              fillColor: AppColors.surface,
+              contentPadding: const EdgeInsets.symmetric(vertical: 15),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
             ),
           ),
-        ],
       ),
     );
   }

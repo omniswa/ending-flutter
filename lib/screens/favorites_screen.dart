@@ -67,77 +67,74 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   Widget build(BuildContext context) {
     final lib = context.watch<LibraryProvider>();
     final user = context.watch<UserDataProvider>();
-    final t = Theme.of(context).textTheme;
     final all = user.favorites.length;
     final items = _items(lib, user);
 
     return SafeArea(
+      top: false,
       bottom: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('Favorites', style: t.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 2),
-                    Text(all == 1 ? '1 book saved' : '$all books saved', style: t.bodyMedium?.copyWith(color: AppColors.muted)),
-                  ]),
-                ),
-                PopupMenuButton<_Sort>(
-                  tooltip: 'Sort by',
-                  initialValue: _sort,
-                  onSelected: (s) => setState(() => _sort = s),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  itemBuilder: (_) => [
-                    for (final s in _Sort.values)
-                      PopupMenuItem(
-                        value: s,
-                        child: Row(children: [
-                          Icon(s.icon, size: 18, color: s == _sort ? AppColors.sage : AppColors.muted),
-                          const SizedBox(width: 12),
-                          Text(s.label, style: TextStyle(fontWeight: s == _sort ? FontWeight.w700 : FontWeight.w500)),
-                        ]),
-                      ),
-                  ],
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: const BoxDecoration(color: AppColors.chip, shape: BoxShape.circle),
-                    child: const Icon(Icons.sort_rounded, size: 22),
+          ScreenHeader(
+            title: 'Favorites',
+            subtitle: all == 1 ? '1 book saved' : '$all books saved',
+            trailing: PopupMenuButton<_Sort>(
+              tooltip: 'Sort by',
+              initialValue: _sort,
+              onSelected: (s) => setState(() => _sort = s),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              itemBuilder: (_) => [
+                for (final s in _Sort.values)
+                  PopupMenuItem(
+                    value: s,
+                    child: Row(children: [
+                      Icon(s.icon, size: 18, color: s == _sort ? AppColors.sage : AppColors.muted),
+                      const SizedBox(width: 12),
+                      Text(s.label, style: TextStyle(fontWeight: s == _sort ? FontWeight.w700 : FontWeight.w500)),
+                    ]),
                   ),
-                ),
               ],
-            ),
-          ),
-          if (all > 0)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-              child: SizedBox(
-                width: double.infinity,
-                child: SegmentedButton<_Filter>(
-                  showSelectedIcon: false,
-                  style: SegmentedButton.styleFrom(
-                    backgroundColor: AppColors.chip,
-                    selectedBackgroundColor: AppColors.sage,
-                    selectedForegroundColor: Colors.white,
-                    foregroundColor: AppColors.ink,
-                    side: BorderSide.none,
-                  ),
-                  segments: const [
-                    ButtonSegment(value: _Filter.all, label: Text('All')),
-                    ButtonSegment(value: _Filter.reading, label: Text('Reading')),
-                    ButtonSegment(value: _Filter.finished, label: Text('Finished')),
-                  ],
-                  selected: {_filter},
-                  onSelectionChanged: (s) => setState(() => _filter = s.first),
-                ),
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.18), shape: BoxShape.circle),
+                child: const Icon(Icons.sort_rounded, size: 22, color: Colors.white),
               ),
             ),
+            bottom: all > 0
+                ? DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.18), blurRadius: 16, offset: const Offset(0, 6))],
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: SegmentedButton<_Filter>(
+                          showSelectedIcon: false,
+                          style: SegmentedButton.styleFrom(
+                            backgroundColor: Colors.transparent,
+                            selectedBackgroundColor: AppColors.sage,
+                            selectedForegroundColor: Colors.white,
+                            foregroundColor: AppColors.ink,
+                            side: BorderSide.none,
+                          ),
+                          segments: const [
+                            ButtonSegment(value: _Filter.all, label: Text('All')),
+                            ButtonSegment(value: _Filter.reading, label: Text('Reading')),
+                            ButtonSegment(value: _Filter.finished, label: Text('Finished')),
+                          ],
+                          selected: {_filter},
+                          onSelectionChanged: (s) => setState(() => _filter = s.first),
+                        ),
+                      ),
+                    ),
+                  )
+                : null,
+          ),
           Expanded(
             child: items.isEmpty
                 ? EmptyState(
@@ -146,7 +143,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                     message: all == 0 ? 'Tap the heart on any book to save it here.' : 'No books match this filter.',
                   )
                 : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
                     itemCount: items.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 12),
                     itemBuilder: (_, i) => _FavoriteCard(key: ValueKey('fav_${items[i].book.id}'), item: items[i]),
@@ -183,7 +180,7 @@ class _FavoriteCard extends StatelessWidget {
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 24),
-        decoration: BoxDecoration(color: AppColors.danger, borderRadius: BorderRadius.circular(16)),
+        decoration: BoxDecoration(color: AppColors.danger, borderRadius: BorderRadius.circular(20)),
         child: const Icon(Icons.favorite_border_rounded, color: Colors.white),
       ),
       onDismissed: (_) => _remove(context, user),

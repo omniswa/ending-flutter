@@ -14,7 +14,13 @@ class BookCover extends StatelessWidget {
   Widget build(BuildContext context) => DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(radius),
-          border: Border.all(color: AppColors.line),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.ink.withValues(alpha: 0.18),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(radius),
@@ -37,9 +43,9 @@ class BookCover extends StatelessWidget {
       );
 }
 
-/// A flat card: white surface, hairline border, no shadow.
+/// A raised card: soft layered shadow, generous radius.
 class SoftCard extends StatelessWidget {
-  const SoftCard({super.key, required this.child, this.padding = const EdgeInsets.all(12), this.color = AppColors.surface, this.radius = 16, this.onTap, this.onLongPress});
+  const SoftCard({super.key, required this.child, this.padding = const EdgeInsets.all(12), this.color = AppColors.surface, this.radius = 20, this.onTap, this.onLongPress});
   final Widget child;
   final EdgeInsetsGeometry padding;
   final Color color;
@@ -48,17 +54,20 @@ class SoftCard extends StatelessWidget {
   final VoidCallback? onLongPress;
 
   @override
-  Widget build(BuildContext context) => Material(
-        color: color,
-        shape: RoundedRectangleBorder(
+  Widget build(BuildContext context) => DecoratedBox(
+        decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(radius),
-          side: const BorderSide(color: AppColors.line),
+          boxShadow: AppColors.softShadow,
         ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          onLongPress: onLongPress,
-          child: Padding(padding: padding, child: child),
+        child: Material(
+          color: color,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius)),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            onLongPress: onLongPress,
+            child: Padding(padding: padding, child: child),
+          ),
         ),
       );
 }
@@ -75,6 +84,12 @@ class SectionTitle extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.baseline,
           textBaseline: TextBaseline.alphabetic,
           children: [
+            Container(
+              width: 4,
+              height: 18,
+              margin: const EdgeInsets.only(right: 10),
+              decoration: BoxDecoration(color: AppColors.terracotta, borderRadius: BorderRadius.circular(2)),
+            ),
             Text(title, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
             const Spacer(),
             if (trailing != null) trailing!,
@@ -84,10 +99,13 @@ class SectionTitle extends StatelessWidget {
 }
 
 class RoundIconButton extends StatelessWidget {
-  const RoundIconButton({super.key, required this.icon, required this.tooltip, required this.onTap});
+  const RoundIconButton({super.key, required this.icon, required this.tooltip, required this.onTap, this.onDark = false});
   final IconData icon;
   final String tooltip;
   final VoidCallback onTap;
+
+  /// Frosted-glass style for use on top of the gradient [ScreenHeader].
+  final bool onDark;
 
   @override
   Widget build(BuildContext context) => IconButton(
@@ -95,8 +113,8 @@ class RoundIconButton extends StatelessWidget {
         onPressed: onTap,
         icon: Icon(icon, size: 22),
         style: IconButton.styleFrom(
-          backgroundColor: AppColors.chip,
-          foregroundColor: AppColors.ink,
+          backgroundColor: onDark ? Colors.white.withValues(alpha: 0.18) : AppColors.chip,
+          foregroundColor: onDark ? Colors.white : AppColors.ink,
           fixedSize: const Size(44, 44),
         ),
       );
@@ -119,8 +137,13 @@ class EmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 40, color: AppColors.muted),
-            const SizedBox(height: 16),
+            Container(
+              width: 84,
+              height: 84,
+              decoration: const BoxDecoration(color: AppColors.sageSoft, shape: BoxShape.circle),
+              child: Icon(icon, size: 38, color: AppColors.sage),
+            ),
+            const SizedBox(height: 20),
             Text(title, style: t.titleMedium?.copyWith(fontWeight: FontWeight.w700), textAlign: TextAlign.center),
             const SizedBox(height: 6),
             Text(message, style: t.bodyMedium?.copyWith(color: AppColors.muted, height: 1.4), textAlign: TextAlign.center),
@@ -130,6 +153,84 @@ class EmptyState extends StatelessWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Gradient banner at the top of each tab: title, subtitle, optional
+/// trailing action and optional bottom content (e.g. a search field).
+class ScreenHeader extends StatelessWidget {
+  const ScreenHeader({super.key, required this.title, this.subtitle, this.trailing, this.bottom, this.letterSpacing = 0});
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+  final Widget? bottom;
+  final double letterSpacing;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        gradient: AppColors.heroGradient,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -40,
+            top: -50,
+            child: Container(
+              width: 170,
+              height: 170,
+              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: 0.06)),
+            ),
+          ),
+          Positioned(
+            right: 50,
+            bottom: -60,
+            child: Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(shape: BoxShape.circle, color: AppColors.terracotta.withValues(alpha: 0.18)),
+            ),
+          ),
+          SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(22, 18, 22, 22),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(title, style: t.headlineMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w700, letterSpacing: letterSpacing)),
+                            if (subtitle != null) ...[
+                              const SizedBox(height: 4),
+                              Text(subtitle!, style: t.bodyMedium?.copyWith(color: Colors.white.withValues(alpha: 0.78))),
+                            ],
+                          ],
+                        ),
+                      ),
+                      if (trailing != null) trailing!,
+                    ],
+                  ),
+                  if (bottom != null) ...[
+                    const SizedBox(height: 18),
+                    bottom!,
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

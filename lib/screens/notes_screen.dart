@@ -28,36 +28,33 @@ class NotesScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = context.watch<NotesProvider>();
     final notes = provider.notes;
-    final t = Theme.of(context).textTheme;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton(
         onPressed: () => _open(context),
         tooltip: 'New note',
-        elevation: 2,
-        backgroundColor: AppColors.sage,
+        elevation: 6,
+        backgroundColor: AppColors.terracotta,
         foregroundColor: Colors.white,
         shape: const CircleBorder(),
         child: const Icon(Icons.add_rounded, size: 28),
       ),
       body: SafeArea(
+        top: false,
         bottom: false,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-              child: Row(children: [
-                Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('Notes', style: t.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 2),
-                    Text(notes.length == 1 ? '1 note' : '${notes.length} notes', style: t.bodyMedium?.copyWith(color: AppColors.muted)),
-                  ]),
-                ),
-                RoundIconButton(icon: Icons.file_upload_outlined, tooltip: 'Import .txt / .md', onTap: () => _import(context)),
-              ]),
+            ScreenHeader(
+              title: 'Notes',
+              subtitle: notes.length == 1 ? '1 note' : '${notes.length} notes',
+              trailing: RoundIconButton(
+                icon: Icons.file_upload_outlined,
+                tooltip: 'Import .txt / .md',
+                onDark: true,
+                onTap: () => _import(context),
+              ),
             ),
             Expanded(
               child: provider.loading
@@ -71,7 +68,7 @@ class NotesScreen extends StatelessWidget {
                           onAction: () => _import(context),
                         )
                       : GridView.builder(
-                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 96),
+                          padding: const EdgeInsets.fromLTRB(20, 20, 20, 96),
                           gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                             maxCrossAxisExtent: 240,
                             mainAxisExtent: 176,

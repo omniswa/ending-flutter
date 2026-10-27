@@ -11,6 +11,30 @@ abstract final class AppColors {
   static const chip = Color(0xFFF1EEE7); // quiet fills
   static const line = Color(0xFFE8E4DA); // hairline borders
   static const danger = Color(0xFFB3412F);
+  static const sageDark = Color(0xFF334029); // gradient end
+  static const sageSoft = Color(0xFFE4EADB); // tinted fills
+  static const terracottaSoft = Color(0xFFF6E4D5);
+
+  /// Brand gradient used on hero surfaces.
+  static const heroGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [sage, sageDark],
+  );
+
+  /// Soft, layered elevation for cards.
+  static List<BoxShadow> get softShadow => [
+        BoxShadow(
+          color: ink.withValues(alpha: 0.06),
+          blurRadius: 20,
+          offset: const Offset(0, 8),
+        ),
+        BoxShadow(
+          color: ink.withValues(alpha: 0.04),
+          blurRadius: 4,
+          offset: const Offset(0, 1),
+        ),
+      ];
 
   static const noteColors = <Color>[
     Color(0xFFFFF6DC),
@@ -74,7 +98,8 @@ abstract final class AppTheme {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         height: 68,
-        indicatorColor: AppColors.sage.withValues(alpha: 0.10),
+        indicatorColor: AppColors.sageSoft,
+        indicatorShape: const StadiumBorder(),
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
