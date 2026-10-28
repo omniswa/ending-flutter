@@ -176,13 +176,14 @@ class _HomeScreenState extends State<HomeScreen> {
   ) {
     switch (lib.state) {
       case LoadState.loading:
-        return [
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            sliver: SliverGrid.builder(
-              gridDelegate: BookCard.gridDelegate,
-              itemCount: 6,
-              itemBuilder: (_, __) => const _SkeletonCard(),
+        return const [
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 64),
+              child: Center(
+                child: CircularProgressIndicator(color: AppColors.sage),
+              ),
             ),
           ),
         ];
@@ -192,7 +193,9 @@ class _HomeScreenState extends State<HomeScreen> {
             child: EmptyState(
               icon: Icons.wifi_off_rounded,
               title: 'Couldn\'t load your library',
-              message: 'Check your connection and try again.',
+              message: lib.error == null
+                  ? 'Check your connection and try again.'
+                  : 'Check your connection and try again.\n\n${lib.error}',
               actionLabel: 'Retry',
               onAction: lib.load,
             ),
@@ -282,44 +285,4 @@ class _LibraryCard extends StatelessWidget {
       ),
     ),
   );
-}
-
-/// Placeholder shown while the catalog loads, so the layout doesn't jump.
-class _SkeletonCard extends StatelessWidget {
-  const _SkeletonCard();
-
-  @override
-  Widget build(BuildContext context) {
-    Widget bar(double w, double h) => Container(
-      width: w,
-      height: h,
-      decoration: BoxDecoration(
-        color: AppColors.chip,
-        borderRadius: BorderRadius.circular(4),
-      ),
-    );
-    return SoftCard(
-      padding: const EdgeInsets.all(12),
-      radius: 10,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: AppColors.chip,
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          bar(110, 13),
-          const SizedBox(height: 8),
-          bar(70, 11),
-          const SizedBox(height: 6),
-        ],
-      ),
-    );
-  }
 }
