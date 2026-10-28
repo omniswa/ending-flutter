@@ -19,7 +19,10 @@ Future<void> main() async {
   runApp(
     MultiProvider(
       providers: [
-        Provider<BookRepository>(create: (_) => BookRepository(store)),
+        Provider<BookRepository>(
+          create: (_) => BookRepository(store),
+          dispose: (_, repo) => repo.dispose(),
+        ),
         ChangeNotifierProvider(create: (c) => LibraryProvider(c.read<BookRepository>())),
         ChangeNotifierProvider(create: (_) => UserDataProvider(store)),
         ChangeNotifierProvider(create: (_) => ReaderSettingsProvider(store)),

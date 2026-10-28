@@ -1,8 +1,8 @@
-import 'package:ending/core/formatters.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
+import '../core/formatters.dart';
 import '../core/theme.dart';
 import '../models/note.dart';
 import '../providers/notes_provider.dart';
@@ -122,7 +122,6 @@ class _NoteCard extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     final color = AppColors
         .noteColors[note.colorIndex.clamp(0, AppColors.noteColors.length - 1)];
-    final words = note.wordCount;
     return SoftCard(
       color: color,
       radius: 10,
@@ -229,24 +228,6 @@ class _NoteCard extends StatelessWidget {
                   formatShortDate(note.updatedAt),
                   style: t.labelSmall?.copyWith(
                     color: AppColors.ink.withValues(alpha: 0.55),
-                  ),
-                ),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.ink.withValues(alpha: 0.06),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    '$words ${words == 1 ? 'word' : 'words'}',
-                    style: t.labelSmall?.copyWith(
-                      color: AppColors.ink.withValues(alpha: 0.6),
-                      fontWeight: FontWeight.w600,
-                    ),
                   ),
                 ),
               ],

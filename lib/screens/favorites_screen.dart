@@ -50,8 +50,8 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         if (lib.byId(f.bookId) case final b?) _Item(b, f, user.progressFor(b.id)),
     ].where((i) => switch (_filter) {
           _Filter.all => true,
-          _Filter.reading => !i.entry.finished,
-          _Filter.finished => i.entry.finished,
+          _Filter.reading => !user.isFinished(i.book.id),
+          _Filter.finished => user.isFinished(i.book.id),
         }).toList();
 
     int cmp(_Item a, _Item b) => switch (_sort) {
@@ -142,10 +142,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                     title: all == 0 ? 'No favorites yet' : 'Nothing here',
                     message: all == 0 ? 'Tap the heart on any book to save it here.' : 'No books match this filter.',
                   )
-                : ListView.separated(
+                : GridView.builder(
                     padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+                    gridDelegate: BookCard.gridDelegate,
                     itemCount: items.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
                     itemBuilder: (_, i) => _FavoriteCard(key: ValueKey('fav_${items[i].book.id}'), item: items[i]),
                   ),
           ),
@@ -170,51 +170,46 @@ class _FavoriteCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = context.read<UserDataProvider>();
     final book = item.book;
-    final finished = item.entry.finished;
-    final p = item.progress;
+    final finished = user.isFinished(book.id);
 
-    return Dismissible(
-      key: ValueKey('dismiss_${book.id}'),
-      direction: DismissDirection.endToStart,
-      background: Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 24),
-        decoration: BoxDecoration(color: AppColors.danger, borderRadius: BorderRadius.circular(20)),
-        child: const Icon(Icons.favorite_border_rounded, color: Colors.white),
-      ),
-      onDismissed: (_) => _remove(context, user),
-      child: BookCard(
-        book: book,
-        progress: p,
-        finished: finished,
-        onTap: () => ReaderScreen.open(context, book),
-        trailing: PopupMenuButton<String>(
-          icon: const Icon(Icons.more_horiz_rounded, color: AppColors.muted),
-          style: IconButton.styleFrom(backgroundColor: AppColors.chip, fixedSize: const Size(38, 38)),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          onSelected: (v) {
-            if (v == 'finish') user.setFinished(book.id, finished: !finished);
-            if (v == 'remove') _remove(context, user);
-          },
-          itemBuilder: (_) => [
-            PopupMenuItem(
-              value: 'finish',
-              child: Row(children: [
-                Icon(finished ? Icons.undo_rounded : Icons.check_circle_outline_rounded, size: 20),
-                const SizedBox(width: 12),
-                Text(finished ? 'Mark as reading' : 'Mark as finished'),
-              ]),
-            ),
-            const PopupMenuItem(
-              value: 'remove',
-              child: Row(children: [
-                Icon(Icons.favorite_border_rounded, size: 20, color: AppColors.danger),
-                SizedBox(width: 12),
-                Text('Remove'),
-              ]),
-            ),
-          ],
+    return BookCard(
+      book: book,
+      progress: item.progress,
+      finished: finished,
+      onTap: () => ReaderScreen.open(context, book),
+      trailing: PopupMenuButton<String>(
+        tooltip: 'More',
+        padding: EdgeInsets.zero,
+        icon: const Icon(Icons.more_horiz_rounded, size: 18, color: AppColors.muted),
+        style: IconButton.styleFrom(
+          backgroundColor: Colors.white.withValues(alpha: 0.85),
+          fixedSize: const Size(32, 32),
+          minimumSize: const Size(32, 32),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        onSelected: (v) {
+          if (v == 'finish') user.setFinished(book.id, finished: !finished);
+          if (v == 'remove') _remove(context, user);
+        },
+        itemBuilder: (_) => [
+          PopupMenuItem(
+            value: 'finish',
+            child: Row(children: [
+              Icon(finished ? Icons.undo_rounded : Icons.check_circle_outline_rounded, size: 20),
+              const SizedBox(width: 12),
+              Text(finished ? 'Mark as reading' : 'Mark as finished'),
+            ]),
+          ),
+          const PopupMenuItem(
+            value: 'remove',
+            child: Row(children: [
+              Icon(Icons.favorite_border_rounded, size: 20, color: AppColors.danger),
+              SizedBox(width: 12),
+              Text('Remove'),
+            ]),
+          ),
+        ],
       ),
     );
   }

@@ -1,9 +1,9 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter/foundation.dart';
 
 import '../core/config.dart';
 import '../core/theme.dart';
@@ -31,6 +31,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     with WidgetsBindingObserver {
   late final BookRepository _repo;
   late final UserDataProvider _user;
+  late final ReaderSettingsProvider _settings;
   final _scroll = ScrollController();
   final _fraction = ValueNotifier<double>(0);
 
@@ -39,8 +40,13 @@ class _ReaderScreenState extends State<ReaderScreen>
   Object? _error;
   int _chapter = 0;
   bool _chrome = true;
+  bool _showHint = false;
   Timer? _saveTimer;
+  Timer? _hintTimer;
   ReaderPrefs? _lastPrefs;
+
+  /// Minimum horizontal fling speed (logical px/s) that counts as a swipe.
+  static const _swipeVelocity = 300.0;
 
   @override
   void initState() {
@@ -48,6 +54,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     WidgetsBinding.instance.addObserver(this);
     _repo = context.read<BookRepository>();
     _user = context.read<UserDataProvider>();
+    _settings = context.read<ReaderSettingsProvider>();
     _load();
   }
 
@@ -55,6 +62,7 @@ class _ReaderScreenState extends State<ReaderScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _saveTimer?.cancel();
+    _hintTimer?.cancel();
     _scroll.dispose();
     _fraction.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -86,6 +94,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       _fraction.value = saved?.scroll ?? 0;
       _restoreScroll();
       _persist(); // marks the book as recently read
+      _maybeShowHint();
     } on Object catch (e, st) {
       debugPrint('Book load failed: $e\n$st');
       if (mounted) setState(() => _error = e);
@@ -144,11 +153,81 @@ class _ReaderScreenState extends State<ReaderScreen>
   }
 
   void _goTo(int i) {
-    if (i < 0 || i >= _chapters!.length) return;
+    final chapters = _chapters;
+    if (chapters == null || i < 0 || i >= chapters.length || i == _chapter) {
+      return;
+    }
+    HapticFeedback.selectionClick();
+    _dismissHint();
     setState(() => _chapter = i);
     _fraction.value = 0;
     if (_scroll.hasClients) _scroll.jumpTo(0);
     _persist();
+  }
+
+  /// One-time hint explaining swipe navigation; shown on the first book opened.
+  void _maybeShowHint() {
+    if (_settings.hintSeen) return;
+    _settings.markHintSeen();
+    setState(() => _showHint = true);
+    _hintTimer = Timer(const Duration(seconds: 6), _dismissHint);
+  }
+
+  void _dismissHint() {
+    _hintTimer?.cancel();
+    if (_showHint && mounted) setState(() => _showHint = false);
+  }
+
+  void _onSwipe(DragEndDetails d) {
+    final chapters = _chapters;
+    final v = d.primaryVelocity ?? 0;
+    if (chapters == null || v.abs() < _swipeVelocity) return;
+    if (v < 0) {
+      _next();
+    } else {
+      _goTo(_chapter - 1);
+    }
+  }
+
+  /// Next chapter, or the finish prompt when already on the last one.
+  void _next() {
+    final chapters = _chapters;
+    if (chapters == null) return;
+    if (_chapter < chapters.length - 1) {
+      _goTo(_chapter + 1);
+    } else {
+      _promptFinish();
+    }
+  }
+
+  Future<void> _promptFinish() async {
+    _dismissHint();
+    if (_user.isFinished(widget.book.id)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You\'ve reached the end of this book.')),
+      );
+      return;
+    }
+    final finish = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('You\'ve reached the end'),
+        content: const Text('Mark this book as finished?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Not yet'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Finish book'),
+          ),
+        ],
+      ),
+    );
+    if (finish != true || !mounted) return;
+    _user.setFinished(widget.book.id, finished: true);
+    Navigator.of(context).maybePop();
   }
 
   void _toggleChrome() {
@@ -156,11 +235,6 @@ class _ReaderScreenState extends State<ReaderScreen>
     SystemChrome.setEnabledSystemUIMode(
       _chrome ? SystemUiMode.edgeToEdge : SystemUiMode.immersiveSticky,
     );
-  }
-
-  void _finish() {
-    _user.setFinished(widget.book.id, finished: true);
-    Navigator.of(context).maybePop();
   }
 
   @override
@@ -186,6 +260,7 @@ class _ReaderScreenState extends State<ReaderScreen>
               Positioned.fill(child: _body(prefs)),
               _topBar(theme),
               _bottomBar(theme, prefs),
+              _hint(theme),
             ],
           ),
         ),
@@ -240,6 +315,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onTap: _toggleChrome,
+      onHorizontalDragEnd: _onSwipe,
       child: NotificationListener<ScrollNotification>(
         onNotification: _onScroll,
         child: SingleChildScrollView(
@@ -291,32 +367,72 @@ class _ReaderScreenState extends State<ReaderScreen>
                   padding: EdgeInsets.only(bottom: prefs.fontSize * 0.9),
                   child: Text(p.trim(), textAlign: prefs.align, style: style),
                 ),
-              const SizedBox(height: 24),
-              Row(
+              const SizedBox(height: 16),
+              _endFooter(theme, isLast),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Quiet end-of-chapter cue in place of the old Previous/Next buttons.
+  /// Tapping it works too, for anyone who can't swipe.
+  Widget _endFooter(ReaderTheme theme, bool isLast) {
+    final color = theme.fg.withValues(alpha: 0.5);
+    final label = isLast ? 'Swipe left to finish' : 'Swipe left for next chapter';
+    return Center(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: _next,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(label, style: TextStyle(color: color, fontSize: 13)),
+              const SizedBox(width: 4),
+              Icon(Icons.chevron_right_rounded, size: 18, color: color),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _hint(ReaderTheme theme) {
+    final bottom = MediaQuery.of(context).padding.bottom + 84;
+    return Positioned(
+      left: 24,
+      right: 24,
+      bottom: bottom,
+      child: IgnorePointer(
+        ignoring: !_showHint,
+        child: AnimatedOpacity(
+          opacity: _showHint ? 1 : 0,
+          duration: const Duration(milliseconds: 250),
+          child: GestureDetector(
+            onTap: _dismissHint,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppColors.ink.withValues(alpha: 0.9),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (_chapter > 0)
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => _goTo(_chapter - 1),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: theme.fg,
-                          side: BorderSide(
-                            color: theme.fg.withValues(alpha: 0.3),
-                          ),
-                        ),
-                        child: const Text('Previous'),
-                      ),
-                    ),
-                  if (_chapter > 0) const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: isLast ? _finish : () => _goTo(_chapter + 1),
-                      child: Text(isLast ? 'Finish book' : 'Next chapter'),
+                  Icon(Icons.swipe_rounded, color: Colors.white, size: 22),
+                  SizedBox(width: 12),
+                  Flexible(
+                    child: Text(
+                      'Swipe left or right to change chapters. Tap the page to show or hide controls.',
+                      style: TextStyle(color: Colors.white, fontSize: 13, height: 1.35),
                     ),
                   ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -386,14 +502,46 @@ class _ReaderScreenState extends State<ReaderScreen>
           ),
           Consumer<UserDataProvider>(
             builder: (_, u, __) {
-              final fav = u.isFavorite(widget.book.id);
-              return IconButton(
-                tooltip: fav ? 'Remove from favorites' : 'Add to favorites',
-                onPressed: () => u.toggleFavorite(widget.book.id),
-                icon: Icon(
-                  fav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                  color: fav ? AppColors.terracotta : theme.fg,
-                ),
+              final id = widget.book.id;
+              final fav = u.isFavorite(id);
+              final done = u.isFinished(id);
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: fav ? 'Remove from favorites' : 'Add to favorites',
+                    onPressed: () => u.toggleFavorite(id),
+                    icon: Icon(
+                      fav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                      color: fav ? AppColors.terracotta : theme.fg,
+                    ),
+                  ),
+                  PopupMenuButton<String>(
+                    tooltip: 'More',
+                    icon: Icon(Icons.more_vert_rounded, color: theme.fg),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    onSelected: (_) => u.setFinished(id, finished: !done),
+                    itemBuilder: (_) => [
+                      PopupMenuItem(
+                        value: 'finished',
+                        child: Row(
+                          children: [
+                            Icon(
+                              done
+                                  ? Icons.undo_rounded
+                                  : Icons.check_circle_outline_rounded,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(done ? 'Mark as not finished' : 'Mark as finished'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               );
             },
           ),

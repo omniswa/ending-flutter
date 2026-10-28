@@ -26,6 +26,8 @@ class BookRepository {
   final LocalStore _store;
   final http.Client _client;
 
+  void dispose() => _client.close();
+
   Uri _resolve(String path) => Uri.parse(AppConfig.baseUrl).resolve(path);
 
   /// Fetches the catalog; falls back to the last cached copy when offline.

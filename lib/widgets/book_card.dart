@@ -7,11 +7,12 @@ import '../models/book.dart';
 import '../models/reading_progress.dart';
 import 'common.dart';
 
-/// The main book row used on Home and Favorites.
+/// Compact grid tile used on Home and Favorites.
 ///
 /// The cover floats on a softly tinted "stage" (the tint is picked from the
-/// book id so a list has gentle variety), next to a status chip, a serif
-/// title and a progress footer.
+/// book id so the grid has gentle variety). Below it sit a serif title, the
+/// author and a one-line status/progress footer. [trailing] is overlaid on the
+/// top-right corner of the stage (favorite heart, overflow menu, ...).
 class BookCard extends StatelessWidget {
   const BookCard({
     super.key,
@@ -28,8 +29,17 @@ class BookCard extends StatelessWidget {
   final bool finished;
   final Widget? trailing;
 
-  static const height = 140.0;
-  static const _stageWidth = 104.0;
+  /// Fixed tile height, for use as the grid's `mainAxisExtent`.
+  static const height = 250.0;
+  static const _stageHeight = 140.0;
+
+  /// Shared grid layout so Home, Favorites and the skeleton line up.
+  static const gridDelegate = SliverGridDelegateWithMaxCrossAxisExtent(
+    maxCrossAxisExtent: 220,
+    mainAxisExtent: height,
+    mainAxisSpacing: 12,
+    crossAxisSpacing: 12,
+  );
 
   static const _stages = <List<Color>>[
     [Color(0xFFE9EEE0), Color(0xFFCCD8BE)], // sage
@@ -44,49 +54,23 @@ class BookCard extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     final p = progress;
     final started = p != null && p.percent > 0;
-    final isNew =
-        !started &&
+    final isNew = !started &&
         !finished &&
         DateTime.now().difference(book.added).inDays.abs() <= 14;
     final stage = _stages[book.id.abs() % _stages.length];
 
-    final _Status status = finished
-        ? const _Status(
-            'Finished',
-            Icons.check_circle_rounded,
-            AppColors.sageSoft,
-            AppColors.sage,
-          )
-        : started
-        ? const _Status(
-            'Reading',
-            Icons.auto_stories_rounded,
-            AppColors.terracottaSoft,
-            AppColors.terracotta,
-          )
-        : isNew
-        ? const _Status(
-            'New',
-            Icons.auto_awesome_rounded,
-            AppColors.sage,
-            Colors.white,
-          )
-        : const _Status(
-            'Not started',
-            Icons.bookmark_border_rounded,
-            AppColors.chip,
-            AppColors.muted,
-          );
-
     return SoftCard(
       padding: EdgeInsets.zero,
+      radius: 18,
       onTap: onTap,
       child: SizedBox(
         height: height,
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              width: _stageWidth,
+              height: _stageHeight,
+              width: double.infinity,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
@@ -96,70 +80,39 @@ class BookCard extends StatelessWidget {
               ),
               child: Stack(
                 alignment: Alignment.center,
-                clipBehavior: Clip.hardEdge,
                 children: [
-                  Positioned(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withValues(alpha: 0.35),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withValues(alpha: 0.25),
-                      ),
-                    ),
-                  ),
-                  BookCover(url: book.cover, width: 72, height: 108),
+                  BookCover(url: book.cover, width: 84, height: 122),
+                  if (isNew)
+                    const Positioned(left: 8, top: 8, child: _Badge('New')),
+                  if (trailing != null)
+                    Positioned(top: 6, right: 6, child: trailing!),
                 ],
               ),
             ),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 12, 4, 12),
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _StatusChip(status),
-                    const SizedBox(height: 6),
                     Text(
                       book.title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.fraunces(
-                        textStyle: t.titleMedium,
+                        textStyle: t.titleSmall,
                         fontWeight: FontWeight.w600,
                         letterSpacing: -0.2,
                         height: 1.2,
                         color: AppColors.ink,
                       ),
                     ),
-                    const SizedBox(height: 3),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.person_outline_rounded,
-                          size: 14,
-                          color: AppColors.muted,
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            book.author,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: t.bodySmall?.copyWith(
-                              color: AppColors.muted,
-                            ),
-                          ),
-                        ),
-                      ],
+                    const SizedBox(height: 2),
+                    Text(
+                      book.author,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: t.bodySmall?.copyWith(color: AppColors.muted),
                     ),
                     const Spacer(),
                     _footer(t, p, started),
@@ -167,16 +120,6 @@ class BookCard extends StatelessWidget {
                 ),
               ),
             ),
-            if (trailing != null)
-              Align(
-                alignment: Alignment.topCenter,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(0, 8, 8, 0),
-                  child: trailing,
-                ),
-              )
-            else
-              const SizedBox(width: 10),
           ],
         ),
       ),
@@ -185,14 +128,12 @@ class BookCard extends StatelessWidget {
 
   Widget _footer(TextTheme t, ReadingProgress? p, bool started) {
     if (finished) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
+      return Row(
         children: [
-          const ProgressBar(value: 1, color: AppColors.sage, minHeight: 6),
-          const SizedBox(height: 5),
+          const Icon(Icons.check_circle_rounded, size: 14, color: AppColors.sage),
+          const SizedBox(width: 5),
           Text(
-            'Completed',
+            'Finished',
             style: t.labelSmall?.copyWith(
               color: AppColors.sage,
               fontWeight: FontWeight.w700,
@@ -206,8 +147,8 @@ class BookCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          ProgressBar(value: p!.percent, minHeight: 6),
-          const SizedBox(height: 5),
+          ProgressBar(value: p!.percent, minHeight: 5),
+          const SizedBox(height: 4),
           Text.rich(
             TextSpan(
               children: [
@@ -233,15 +174,11 @@ class BookCard extends StatelessWidget {
     }
     return Row(
       children: [
-        const Icon(
-          Icons.calendar_today_rounded,
-          size: 12,
-          color: AppColors.muted,
-        ),
+        const Icon(Icons.bookmark_border_rounded, size: 14, color: AppColors.muted),
         const SizedBox(width: 5),
         Expanded(
           child: Text(
-            'Added ${formatDate(book.added)}',
+            'Added ${formatShortDate(book.added)}',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: t.labelSmall?.copyWith(color: AppColors.muted),
@@ -252,40 +189,24 @@ class BookCard extends StatelessWidget {
   }
 }
 
-class _Status {
-  const _Status(this.label, this.icon, this.background, this.foreground);
+class _Badge extends StatelessWidget {
+  const _Badge(this.label);
   final String label;
-  final IconData icon;
-  final Color background;
-  final Color foreground;
-}
-
-class _StatusChip extends StatelessWidget {
-  const _StatusChip(this.status);
-  final _Status status;
 
   @override
   Widget build(BuildContext context) => Container(
-    height: 22,
-    padding: const EdgeInsets.symmetric(horizontal: 8),
-    decoration: BoxDecoration(
-      color: status.background,
-      borderRadius: BorderRadius.circular(11),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(status.icon, size: 12, color: status.foreground),
-        const SizedBox(width: 4),
-        Text(
-          status.label,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: status.foreground,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.2,
-          ),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: AppColors.sage,
+          borderRadius: BorderRadius.circular(10),
         ),
-      ],
-    ),
-  );
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.2,
+              ),
+        ),
+      );
 }
