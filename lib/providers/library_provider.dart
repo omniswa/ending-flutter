@@ -14,12 +14,14 @@ class LibraryProvider extends ChangeNotifier {
   List<Book> _books = const [];
   Map<int, Book> _index = const {};
   LoadState _state = LoadState.loading;
+  Object? _error;
   String _query = '';
   String? _error;
   List<Book>? _filtered;
 
   LoadState get state => _state;
   List<Book> get books => _books;
+  String? get errorMessage => _error?.toString();
   String get query => _query;
 
   /// Short description of the last load failure, if any.
@@ -41,6 +43,7 @@ class LibraryProvider extends ChangeNotifier {
   }
 
   Future<void> load() async {
+    _error = null;
     if (_books.isEmpty) {
       _state = LoadState.loading;
       notifyListeners();
@@ -54,6 +57,7 @@ class LibraryProvider extends ChangeNotifier {
       _state = LoadState.ready;
       _error = null;
     } on Object catch (e, st) {
+      _error = e;
       debugPrint('Library load failed: $e\n$st');
       _error = e.toString();
       if (_books.isEmpty) _state = LoadState.error;
