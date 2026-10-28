@@ -192,10 +192,14 @@ class _HomeScreenState extends State<HomeScreen> {
             child: EmptyState(
               icon: Icons.wifi_off_rounded,
               title: 'Couldn\'t load your library',
+<<<<<<< HEAD
               message: [
                 'Check your connection and try again.',
                 if (lib.errorMessage != null) 'Details: ${lib.errorMessage}',
               ].join('\n\n'),
+=======
+              message: 'Check your connection and try again.',
+>>>>>>> parent of f521951 (Use spinner for library loading, show load error detail, accept ISO dates)
               actionLabel: 'Retry',
               onAction: lib.load,
             ),
