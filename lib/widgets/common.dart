@@ -316,10 +316,12 @@ class ProgressBar extends StatelessWidget {
     super.key,
     required this.value,
     this.color = AppColors.terracotta,
+    this.backgroundColor = AppColors.chip,
     this.minHeight = 4,
   });
   final double value;
   final Color color;
+  final Color backgroundColor;
   final double minHeight;
 
   @override
@@ -328,7 +330,7 @@ class ProgressBar extends StatelessWidget {
     child: LinearProgressIndicator(
       value: value.clamp(0.02, 1.0).toDouble(),
       minHeight: minHeight,
-      backgroundColor: AppColors.chip,
+      backgroundColor: backgroundColor,
       color: color,
     ),
   );

@@ -265,8 +265,8 @@ class _LibraryCard extends StatelessWidget {
       padding: EdgeInsets.zero,
       style: IconButton.styleFrom(
         backgroundColor: Colors.white.withValues(alpha: 0.85),
-        fixedSize: const Size(32, 32),
-        minimumSize: const Size(32, 32),
+        fixedSize: const Size(28, 28),
+        minimumSize: const Size(28, 28),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
       icon: AnimatedSwitcher(
