@@ -1,18 +1,39 @@
 const _months = [
-  'January', 'February', 'March', 'April', 'May', 'June', 'July',
-  'August', 'September', 'October', 'November', 'December',
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ];
 
 String formatDate(DateTime d) => '${_months[d.month - 1]} ${d.day}, ${d.year}';
 
 /// "Oct 27" — compact form for tight spaces.
-String formatShortDate(DateTime d) => '${_months[d.month - 1].substring(0, 3)} ${d.day}';
+String formatShortDate(DateTime d) =>
+    '${_months[d.month - 1].substring(0, 3)} ${d.day}';
+
+String formatTimestamp(DateTime d) {
+  final hour = d.hour % 12 == 0 ? 12 : d.hour % 12;
+  final minute = d.minute.toString().padLeft(2, '0');
+  final period = d.hour < 12 ? 'AM' : 'PM';
+  return '${_months[d.month - 1].substring(0, 3)} ${d.day}, ${d.year} - $hour:$minute$period';
+}
 
 /// Parses dates like "October 1, 2026". Returns null when malformed.
 DateTime? parseLongDate(String input) {
-  final m = RegExp(r'^([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})$').firstMatch(input.trim());
+  final m = RegExp(r'^([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})$')
+      .firstMatch(input.trim());
   if (m == null) return null;
-  final month = _months.indexWhere((x) => x.toLowerCase() == m.group(1)!.toLowerCase());
+  final month = _months.indexWhere(
+    (x) => x.toLowerCase() == m.group(1)!.toLowerCase(),
+  );
   if (month < 0) return null;
   return DateTime(int.parse(m.group(3)!), month + 1, int.parse(m.group(2)!));
 }

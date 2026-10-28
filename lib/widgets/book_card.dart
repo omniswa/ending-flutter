@@ -119,7 +119,8 @@ class BookCard extends StatelessWidget {
               ),
             ),
             if (isNew) const Positioned(left: 6, top: 6, child: _Badge('New')),
-            if (trailing != null) Positioned(top: 4, right: 4, child: trailing!),
+            if (trailing != null)
+              Positioned(top: 4, right: 4, child: trailing!),
           ],
         ),
       ),

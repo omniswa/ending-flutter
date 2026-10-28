@@ -203,16 +203,16 @@ class _ReaderScreenState extends State<ReaderScreen>
   Future<void> _promptFinish() async {
     _dismissHint();
     if (_user.isFinished(widget.book.id)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You\'ve reached the end of this book.')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('You reached the end.')));
       return;
     }
     final finish = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('You\'ve reached the end'),
+        title: const Text('You reached the end'),
         content: const Text('Mark this book as finished?'),
+        actionsAlignment: MainAxisAlignment.spaceBetween,
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -380,7 +380,9 @@ class _ReaderScreenState extends State<ReaderScreen>
   /// Tapping it works too, for anyone who can't swipe.
   Widget _endFooter(ReaderTheme theme, bool isLast) {
     final color = theme.fg.withValues(alpha: 0.5);
-    final label = isLast ? 'Swipe left to finish' : 'Swipe left for next chapter';
+    final label = isLast
+        ? 'Swipe left to finish'
+        : 'Swipe left for next chapter';
     return Center(
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
@@ -427,7 +429,11 @@ class _ReaderScreenState extends State<ReaderScreen>
                   Flexible(
                     child: Text(
                       'Swipe left or right to change chapters. Tap the page to show or hide controls.',
-                      style: TextStyle(color: Colors.white, fontSize: 13, height: 1.35),
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        height: 1.35,
+                      ),
                     ),
                   ),
                 ],
@@ -512,7 +518,9 @@ class _ReaderScreenState extends State<ReaderScreen>
                     tooltip: fav ? 'Remove from favorites' : 'Add to favorites',
                     onPressed: () => u.toggleFavorite(id),
                     icon: Icon(
-                      fav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                      fav
+                          ? Icons.favorite_rounded
+                          : Icons.favorite_border_rounded,
                       color: fav ? AppColors.terracotta : theme.fg,
                     ),
                   ),
@@ -535,7 +543,11 @@ class _ReaderScreenState extends State<ReaderScreen>
                               size: 20,
                             ),
                             const SizedBox(width: 12),
-                            Text(done ? 'Mark as not finished' : 'Mark as finished'),
+                            Text(
+                              done
+                                  ? 'Mark as not finished'
+                                  : 'Mark as finished',
+                            ),
                           ],
                         ),
                       ),

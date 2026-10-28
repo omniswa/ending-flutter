@@ -220,14 +220,15 @@ class _NoteCard extends StatelessWidget {
               children: [
                 Icon(
                   Icons.schedule_rounded,
-                  size: 12,
+                  size: 8,
                   color: AppColors.ink.withValues(alpha: 0.45),
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  formatShortDate(note.updatedAt),
+                  formatTimestamp(note.updatedAt),
                   style: t.labelSmall?.copyWith(
                     color: AppColors.ink.withValues(alpha: 0.55),
+                    fontSize: 8,
                   ),
                 ),
               ],

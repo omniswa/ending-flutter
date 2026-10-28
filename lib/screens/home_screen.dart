@@ -77,7 +77,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     SliverToBoxAdapter(
                       child: SizedBox(
-                        height: 252,
+                        height: 204,
                         child: ListView.separated(
                           scrollDirection: Axis.horizontal,
                           padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -158,9 +158,12 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             filled: true,
             fillColor: AppColors.surface,
-            contentPadding: const EdgeInsets.symmetric(vertical: 14),
+            contentPadding: const EdgeInsets.symmetric(
+              vertical: 0,
+              horizontal: 0,
+            ),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(28),
               borderSide: BorderSide.none,
             ),
           ),
