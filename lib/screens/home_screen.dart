@@ -44,58 +44,76 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!searching) {
       for (final p in user.recent) {
         final b = lib.byId(p.bookId);
-        if (b != null && p.percent > 0) recent.add((b, p));
+        // Finished books drop out of "Continue reading".
+        if (b != null && p.percent > 0 && !user.isFinished(b.id)) {
+          recent.add((b, p));
+        }
         if (recent.length == 8) break;
       }
     }
     final books = lib.filtered;
 
+    // The header sits outside the scroll view so it stays pinned, matching
+    // the Favorites and Notes tabs.
     return SafeArea(
       top: false,
       bottom: false,
-      child: RefreshIndicator(
-        color: AppColors.sage,
-        onRefresh: lib.load,
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          slivers: [
-            SliverToBoxAdapter(child: _header(context, lib)),
-            if (recent.isNotEmpty) ...[
-              const SliverToBoxAdapter(child: SectionTitle('Continue reading')),
-              SliverToBoxAdapter(
-                child: SizedBox(
-                  height: 252,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    itemCount: recent.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 14),
-                    itemBuilder: (_, i) => RecentCard(
-                      book: recent[i].$1,
-                      progress: recent[i].$2,
-                      onTap: () => ReaderScreen.open(context, recent[i].$1),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _header(context, lib),
+          Expanded(
+            child: RefreshIndicator(
+              color: AppColors.sage,
+              onRefresh: lib.load,
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                slivers: [
+                  if (recent.isNotEmpty) ...[
+                    const SliverToBoxAdapter(
+                      child: SectionTitle('Continue reading'),
+                    ),
+                    SliverToBoxAdapter(
+                      child: SizedBox(
+                        height: 252,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          itemCount: recent.length,
+                          separatorBuilder: (_, __) => const SizedBox(width: 14),
+                          itemBuilder: (_, i) => RecentCard(
+                            book: recent[i].$1,
+                            progress: recent[i].$2,
+                            onTap: () =>
+                                ReaderScreen.open(context, recent[i].$1),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  SliverToBoxAdapter(
+                    child: SectionTitle(
+                      searching ? 'Results' : 'Library',
+                      trailing: lib.state == LoadState.ready
+                          ? Text(
+                              books.length == 1
+                                  ? '1 book'
+                                  : '${books.length} books',
+                              style: Theme.of(context).textTheme.labelMedium
+                                  ?.copyWith(color: AppColors.muted),
+                            )
+                          : null,
                     ),
                   ),
-                ),
-              ),
-            ],
-            SliverToBoxAdapter(
-              child: SectionTitle(
-                searching ? 'Results' : 'Library',
-                trailing: lib.state == LoadState.ready
-                    ? Text(
-                        books.length == 1 ? '1 book' : '${books.length} books',
-                        style: Theme.of(context).textTheme.labelMedium
-                            ?.copyWith(color: AppColors.muted),
-                      )
-                    : null,
+                  ..._librarySlivers(lib, user, books),
+                  const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                ],
               ),
             ),
-            ..._librarySlivers(lib, user, books),
-            const SliverToBoxAdapter(child: SizedBox(height: 24)),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -160,9 +178,9 @@ class _HomeScreenState extends State<HomeScreen> {
         return [
           SliverPadding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            sliver: SliverList.separated(
-              itemCount: 4,
-              separatorBuilder: (_, __) => const SizedBox(height: 14),
+            sliver: SliverGrid.builder(
+              gridDelegate: BookCard.gridDelegate,
+              itemCount: 6,
               itemBuilder: (_, __) => const _SkeletonCard(),
             ),
           ),
@@ -198,13 +216,14 @@ class _HomeScreenState extends State<HomeScreen> {
         return [
           SliverPadding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            sliver: SliverList.separated(
+            sliver: SliverGrid.builder(
+              gridDelegate: BookCard.gridDelegate,
               itemCount: books.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 14),
               itemBuilder: (_, i) => _LibraryCard(
                 key: ValueKey(books[i].id),
                 book: books[i],
                 progress: user.progressFor(books[i].id),
+                finished: user.isFinished(books[i].id),
                 favorite: user.isFavorite(books[i].id),
                 onFavorite: () {
                   HapticFeedback.selectionClick();
@@ -223,11 +242,13 @@ class _LibraryCard extends StatelessWidget {
     super.key,
     required this.book,
     required this.progress,
+    required this.finished,
     required this.favorite,
     required this.onFavorite,
   });
   final Book book;
   final ReadingProgress? progress;
+  final bool finished;
   final bool favorite;
   final VoidCallback onFavorite;
 
@@ -235,13 +256,17 @@ class _LibraryCard extends StatelessWidget {
   Widget build(BuildContext context) => BookCard(
     book: book,
     progress: progress,
+    finished: finished,
     onTap: () => ReaderScreen.open(context, book),
     trailing: IconButton(
       tooltip: favorite ? 'Remove from favorites' : 'Add to favorites',
       onPressed: onFavorite,
+      padding: EdgeInsets.zero,
       style: IconButton.styleFrom(
-        backgroundColor: favorite ? AppColors.terracottaSoft : AppColors.chip,
-        fixedSize: const Size(38, 38),
+        backgroundColor: Colors.white.withValues(alpha: 0.85),
+        fixedSize: const Size(32, 32),
+        minimumSize: const Size(32, 32),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
       icon: AnimatedSwitcher(
         duration: const Duration(milliseconds: 180),
@@ -250,7 +275,7 @@ class _LibraryCard extends StatelessWidget {
         child: Icon(
           favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
           key: ValueKey(favorite),
-          size: 20,
+          size: 18,
           color: favorite ? AppColors.terracotta : AppColors.muted,
         ),
       ),
@@ -273,34 +298,26 @@ class _SkeletonCard extends StatelessWidget {
       ),
     );
     return SoftCard(
-      padding: const EdgeInsets.all(14),
-      radius: 24,
-      child: SizedBox(
-        height: BookCard.height - 28,
-        child: Row(
-          children: [
-            Container(
-              width: 72,
-              height: 108,
+      padding: const EdgeInsets.all(12),
+      radius: 18,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Container(
+              width: double.infinity,
               decoration: BoxDecoration(
                 color: AppColors.chip,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(10),
               ),
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 4),
-                  bar(160, 14),
-                  const SizedBox(height: 10),
-                  bar(100, 12),
-                ],
-              ),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 12),
+          bar(110, 13),
+          const SizedBox(height: 8),
+          bar(70, 11),
+          const SizedBox(height: 6),
+        ],
       ),
     );
   }

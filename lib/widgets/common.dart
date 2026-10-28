@@ -19,7 +19,7 @@ class BookCover extends StatelessWidget {
   @override
   Widget build(BuildContext context) => DecoratedBox(
     decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(0),
+      borderRadius: BorderRadius.circular(radius),
       boxShadow: [
         BoxShadow(
           color: AppColors.ink.withValues(alpha: 0.18),
@@ -29,7 +29,7 @@ class BookCover extends StatelessWidget {
       ],
     ),
     child: ClipRRect(
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(radius),
       child: SizedBox(
         width: width,
         height: height,

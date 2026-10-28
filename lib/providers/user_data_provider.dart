@@ -4,7 +4,11 @@ import '../models/favorite_entry.dart';
 import '../models/reading_progress.dart';
 import '../services/local_store.dart';
 
-/// Favorites + reading progress. Synchronous reads, persisted on every change.
+/// Favorites, finished books and reading progress.
+/// Synchronous reads, persisted on every change.
+///
+/// "Finished" is tracked separately from favorites, so any book can be marked
+/// finished whether or not it has been favorited.
 class UserDataProvider extends ChangeNotifier {
   UserDataProvider(this._store) {
     _restore();
@@ -12,21 +16,35 @@ class UserDataProvider extends ChangeNotifier {
 
   static const _favKey = 'favorites_v1';
   static const _progressKey = 'progress_v1';
+  static const _finishedKey = 'finished_v1';
 
   final LocalStore _store;
   final Map<int, FavoriteEntry> _favs = {};
   final Map<int, ReadingProgress> _progress = {};
+  final Set<int> _finished = {};
 
   void _restore() {
     final f = _store.readJson(_favKey);
+    var migrated = false;
     if (f is List) {
       for (final e in f) {
         try {
-          final x = FavoriteEntry.fromJson(e as Map<String, dynamic>);
+          final map = e as Map<String, dynamic>;
+          final x = FavoriteEntry.fromJson(map);
           _favs[x.bookId] = x;
+          // Migrate the legacy per-favorite "finished" flag.
+          if (map['finished'] == true && _finished.add(x.bookId)) {
+            migrated = true;
+          }
         } on Object {
           continue; // skip a corrupted record
         }
+      }
+    }
+    final fin = _store.readJson(_finishedKey);
+    if (fin is List) {
+      for (final e in fin) {
+        if (e is int) _finished.add(e);
       }
     }
     final p = _store.readJson(_progressKey);
@@ -40,6 +58,7 @@ class UserDataProvider extends ChangeNotifier {
         }
       }
     }
+    if (migrated) _saveFinished(notify: false);
   }
 
   List<FavoriteEntry> get favorites => List.unmodifiable(_favs.values);
@@ -49,6 +68,7 @@ class UserDataProvider extends ChangeNotifier {
       _progress.values.toList()..sort((a, b) => b.lastOpened.compareTo(a.lastOpened));
 
   bool isFavorite(int id) => _favs.containsKey(id);
+  bool isFinished(int id) => _finished.contains(id);
   FavoriteEntry? favoriteFor(int id) => _favs[id];
   ReadingProgress? progressFor(int id) => _progress[id];
 
@@ -59,11 +79,10 @@ class UserDataProvider extends ChangeNotifier {
     _saveFavs();
   }
 
+  /// Works for any book, favorite or not.
   void setFinished(int id, {required bool finished}) {
-    final e = _favs[id];
-    if (e == null) return;
-    _favs[id] = e.copyWith(finished: finished);
-    _saveFavs();
+    final changed = finished ? _finished.add(id) : _finished.remove(id);
+    if (changed) _saveFinished();
   }
 
   FavoriteEntry? removeFavorite(int id) {
@@ -86,5 +105,10 @@ class UserDataProvider extends ChangeNotifier {
   void _saveFavs() {
     _store.writeJson(_favKey, _favs.values.map((e) => e.toJson()).toList());
     notifyListeners();
+  }
+
+  void _saveFinished({bool notify = true}) {
+    _store.writeJson(_finishedKey, _finished.toList());
+    if (notify) notifyListeners();
   }
 }
