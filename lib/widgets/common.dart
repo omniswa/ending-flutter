@@ -344,6 +344,7 @@ void showUndoSnack(BuildContext context, String message, VoidCallback onUndo) {
       SnackBar(
         content: Text(message, maxLines: 1, overflow: TextOverflow.ellipsis),
         duration: const Duration(seconds: 4),
+        persist: false,
         action: SnackBarAction(label: 'Undo', onPressed: onUndo),
       ),
     );
