@@ -54,14 +54,15 @@ class BookCard extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     final p = progress;
     final started = p != null && p.percent > 0;
-    final isNew = !started &&
+    final isNew =
+        !started &&
         !finished &&
         DateTime.now().difference(book.added).inDays.abs() <= 14;
     final stage = _stages[book.id.abs() % _stages.length];
 
     return SoftCard(
       padding: EdgeInsets.zero,
-      radius: 18,
+      radius: 10,
       onTap: onTap,
       child: SizedBox(
         height: height,
@@ -78,15 +79,22 @@ class BookCard extends StatelessWidget {
                   colors: stage,
                 ),
               ),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  BookCover(url: book.cover, width: 84, height: 122),
-                  if (isNew)
-                    const Positioned(left: 8, top: 8, child: _Badge('New')),
-                  if (trailing != null)
-                    Positioned(top: 6, right: 6, child: trailing!),
-                ],
+              child: LayoutBuilder(
+                builder: (context, constraints) => Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    BookCover(
+                      url: book.cover,
+                      width: constraints.maxWidth,
+                      height: _stageHeight,
+                      radius: 0,
+                    ),
+                    if (isNew)
+                      const Positioned(left: 8, top: 8, child: _Badge('New')),
+                    if (trailing != null)
+                      Positioned(top: 6, right: 6, child: trailing!),
+                  ],
+                ),
               ),
             ),
             Expanded(
@@ -130,7 +138,11 @@ class BookCard extends StatelessWidget {
     if (finished) {
       return Row(
         children: [
-          const Icon(Icons.check_circle_rounded, size: 14, color: AppColors.sage),
+          const Icon(
+            Icons.check_circle_rounded,
+            size: 14,
+            color: AppColors.sage,
+          ),
           const SizedBox(width: 5),
           Text(
             'Finished',
@@ -174,7 +186,11 @@ class BookCard extends StatelessWidget {
     }
     return Row(
       children: [
-        const Icon(Icons.bookmark_border_rounded, size: 14, color: AppColors.muted),
+        const Icon(
+          Icons.bookmark_border_rounded,
+          size: 14,
+          color: AppColors.muted,
+        ),
         const SizedBox(width: 5),
         Expanded(
           child: Text(
@@ -195,18 +211,18 @@ class _Badge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(
-          color: AppColors.sage,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Text(
-          label,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.2,
-              ),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    decoration: BoxDecoration(
+      color: AppColors.sage,
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Text(
+      label,
+      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+        color: Colors.white,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.2,
+      ),
+    ),
+  );
 }

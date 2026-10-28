@@ -324,7 +324,7 @@ class _ReaderScreenState extends State<ReaderScreen>
             prefs.margin,
             media.padding.top + 76,
             prefs.margin,
-            media.padding.bottom + 120,
+            media.padding.bottom + 100,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,

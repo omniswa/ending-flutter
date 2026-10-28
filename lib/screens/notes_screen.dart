@@ -78,7 +78,7 @@ class NotesScreen extends StatelessWidget {
                       onAction: () => _import(context),
                     )
                   : GridView.builder(
-                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 96),
+                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
                       gridDelegate:
                           const SliverGridDelegateWithMaxCrossAxisExtent(
                             maxCrossAxisExtent: 240,
@@ -163,7 +163,7 @@ class _NoteCard extends StatelessWidget {
                     color: AppColors.muted,
                   ),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                   onSelected: (v) {
                     if (v == 'export')

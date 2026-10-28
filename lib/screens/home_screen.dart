@@ -82,7 +82,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           scrollDirection: Axis.horizontal,
                           padding: const EdgeInsets.symmetric(horizontal: 20),
                           itemCount: recent.length,
-                          separatorBuilder: (_, __) => const SizedBox(width: 14),
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(width: 14),
                           itemBuilder: (_, i) => RecentCard(
                             book: recent[i].$1,
                             progress: recent[i].$2,
@@ -157,7 +158,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             filled: true,
             fillColor: AppColors.surface,
-            contentPadding: const EdgeInsets.symmetric(vertical: 15),
+            contentPadding: const EdgeInsets.symmetric(vertical: 14),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(18),
               borderSide: BorderSide.none,
@@ -299,7 +300,7 @@ class _SkeletonCard extends StatelessWidget {
     );
     return SoftCard(
       padding: const EdgeInsets.all(12),
-      radius: 18,
+      radius: 10,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
