@@ -7,12 +7,12 @@ import '../models/book.dart';
 import '../models/reading_progress.dart';
 import 'common.dart';
 
-/// Compact grid tile used on Home and Favorites.
+/// Compact, full-bleed grid tile used on Home and Favorites.
 ///
-/// The cover floats on a softly tinted "stage" (the tint is picked from the
-/// book id so the grid has gentle variety). Below it sit a serif title, the
-/// author and a one-line status/progress footer. [trailing] is overlaid on the
-/// top-right corner of the stage (favorite heart, overflow menu, ...).
+/// The cover fills the whole tile. Everything else is layered on top of it:
+/// a "New" badge (top-left), [trailing] (top-right: favorite heart, overflow
+/// menu, ...) and, over a dark scrim at the bottom, the title, author and a
+/// one-line status/progress footer.
 class BookCard extends StatelessWidget {
   const BookCard({
     super.key,
@@ -29,25 +29,16 @@ class BookCard extends StatelessWidget {
   final bool finished;
   final Widget? trailing;
 
-  /// Fixed tile height, for use as the grid's `mainAxisExtent`.
-  static const height = 250.0;
-  static const _stageHeight = 140.0;
-
   /// Shared grid layout so Home, Favorites and the skeleton line up.
+  /// Portrait, book-cover proportions; three columns on a typical phone.
   static const gridDelegate = SliverGridDelegateWithMaxCrossAxisExtent(
-    maxCrossAxisExtent: 220,
-    mainAxisExtent: height,
-    mainAxisSpacing: 12,
-    crossAxisSpacing: 12,
+    maxCrossAxisExtent: 130,
+    childAspectRatio: 0.62,
+    mainAxisSpacing: 10,
+    crossAxisSpacing: 10,
   );
 
-  static const _stages = <List<Color>>[
-    [Color(0xFFE9EEE0), Color(0xFFCCD8BE)], // sage
-    [Color(0xFFF8E8DA), Color(0xFFEBCBB0)], // terracotta
-    [Color(0xFFE5EEF1), Color(0xFFC5D8E0)], // sky
-    [Color(0xFFF0E7F5), Color(0xFFDAC9E6)], // lilac
-    [Color(0xFFFFF3D1), Color(0xFFF3DC9C)], // butter
-  ];
+  static const _onCover = Colors.white;
 
   @override
   Widget build(BuildContext context) {
@@ -58,76 +49,77 @@ class BookCard extends StatelessWidget {
         !started &&
         !finished &&
         DateTime.now().difference(book.added).inDays.abs() <= 14;
-    final stage = _stages[book.id.abs() % _stages.length];
 
     return SoftCard(
       padding: EdgeInsets.zero,
       radius: 10,
       onTap: onTap,
-      child: SizedBox(
-        height: height,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      child: LayoutBuilder(
+        builder: (context, c) => Stack(
+          fit: StackFit.expand,
           children: [
-            Container(
-              height: _stageHeight,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: stage,
-                ),
-              ),
-              child: LayoutBuilder(
-                builder: (context, constraints) => Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    BookCover(
-                      url: book.cover,
-                      width: constraints.maxWidth,
-                      height: _stageHeight,
-                      radius: 0,
-                    ),
-                    if (isNew)
-                      const Positioned(left: 8, top: 8, child: _Badge('New')),
-                    if (trailing != null)
-                      Positioned(top: 6, right: 6, child: trailing!),
-                  ],
-                ),
-              ),
+            BookCover(
+              url: book.cover,
+              width: c.maxWidth,
+              height: c.maxHeight,
+              radius: 0,
             ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      book.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.fraunces(
-                        textStyle: t.titleSmall,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: -0.2,
-                        height: 1.2,
-                        color: AppColors.ink,
+            // Scrim keeps the text readable on any cover.
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      AppColors.ink.withValues(alpha: 0.72),
+                      AppColors.ink.withValues(alpha: 0.92),
+                    ],
+                    stops: const [0, 0.45, 1],
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 28, 8, 8),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        book.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.fraunces(
+                          textStyle: t.labelLarge,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: -0.1,
+                          height: 1.15,
+                          color: _onCover,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      book.author,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: t.bodySmall?.copyWith(color: AppColors.muted),
-                    ),
-                    const Spacer(),
-                    _footer(t, p, started),
-                  ],
+                      const SizedBox(height: 2),
+                      Text(
+                        book.author,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: t.labelSmall?.copyWith(
+                          fontSize: 10,
+                          color: _onCover.withValues(alpha: 0.75),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      _footer(t, p, started),
+                    ],
+                  ),
                 ),
               ),
             ),
+            if (isNew) const Positioned(left: 6, top: 6, child: _Badge('New')),
+            if (trailing != null) Positioned(top: 4, right: 4, child: trailing!),
           ],
         ),
       ),
@@ -135,19 +127,16 @@ class BookCard extends StatelessWidget {
   }
 
   Widget _footer(TextTheme t, ReadingProgress? p, bool started) {
+    final small = t.labelSmall?.copyWith(fontSize: 10);
     if (finished) {
       return Row(
         children: [
-          const Icon(
-            Icons.check_circle_rounded,
-            size: 14,
-            color: AppColors.sage,
-          ),
-          const SizedBox(width: 5),
+          const Icon(Icons.check_circle_rounded, size: 12, color: _onCover),
+          const SizedBox(width: 4),
           Text(
             'Finished',
-            style: t.labelSmall?.copyWith(
-              color: AppColors.sage,
+            style: small?.copyWith(
+              color: _onCover,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -159,7 +148,11 @@ class BookCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          ProgressBar(value: p!.percent, minHeight: 5),
+          ProgressBar(
+            value: p!.percent,
+            minHeight: 4,
+            backgroundColor: Colors.white.withValues(alpha: 0.25),
+          ),
           const SizedBox(height: 4),
           Text.rich(
             TextSpan(
@@ -167,37 +160,37 @@ class BookCard extends StatelessWidget {
                 TextSpan(
                   text: formatPercent(p.percent),
                   style: const TextStyle(
-                    color: AppColors.terracotta,
+                    color: Color(0xFFF0C9A8),
                     fontWeight: FontWeight.w800,
                   ),
                 ),
                 TextSpan(
-                  text: '  ·  ${formatTimeLeft(p.minutesLeft)}',
-                  style: const TextStyle(color: AppColors.muted),
+                  text: ' · ${formatTimeLeft(p.minutesLeft)}',
+                  style: TextStyle(color: _onCover.withValues(alpha: 0.75)),
                 ),
               ],
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: t.labelSmall,
+            style: small,
           ),
         ],
       );
     }
     return Row(
       children: [
-        const Icon(
+        Icon(
           Icons.bookmark_border_rounded,
-          size: 14,
-          color: AppColors.muted,
+          size: 12,
+          color: _onCover.withValues(alpha: 0.75),
         ),
-        const SizedBox(width: 5),
+        const SizedBox(width: 4),
         Expanded(
           child: Text(
             'Added ${formatShortDate(book.added)}',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: t.labelSmall?.copyWith(color: AppColors.muted),
+            style: small?.copyWith(color: _onCover.withValues(alpha: 0.75)),
           ),
         ),
       ],

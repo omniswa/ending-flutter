@@ -183,8 +183,8 @@ class _FavoriteCard extends StatelessWidget {
         icon: const Icon(Icons.more_horiz_rounded, size: 18, color: AppColors.muted),
         style: IconButton.styleFrom(
           backgroundColor: Colors.white.withValues(alpha: 0.85),
-          fixedSize: const Size(32, 32),
-          minimumSize: const Size(32, 32),
+          fixedSize: const Size(28, 28),
+          minimumSize: const Size(28, 28),
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
