@@ -29,15 +29,33 @@ class LocalStore {
     return File(p.join(dir.path, name));
   }
 
+  /// Returns null when the file doesn't exist yet.
+  ///
+  /// If the file exists but isn't valid JSON, it is moved aside to
+  /// `<name>.bad-<timestamp>` (so the data can still be recovered by hand)
+  /// and null is returned. Real I/O errors are rethrown so callers can avoid
+  /// overwriting data they failed to read.
   Future<Object?> readFile(String name) async {
+    final f = await _file(name);
+    if (!await f.exists()) return null;
+    final raw = await f.readAsString();
     try {
-      final f = await _file(name);
-      if (!await f.exists()) return null;
-      return jsonDecode(await f.readAsString());
-    } on Object {
+      return jsonDecode(raw);
+    } on FormatException {
+      await _moveAside(f);
       return null;
     }
   }
+
+  /// Copies an existing file to `<name>.bak-<timestamp>`; no-op if missing.
+  Future<void> backupFile(String name) async {
+    final f = await _file(name);
+    if (!await f.exists()) return;
+    await f.copy('${f.path}.bak-${DateTime.now().millisecondsSinceEpoch}');
+  }
+
+  Future<void> _moveAside(File f) =>
+      f.rename('${f.path}.bad-${DateTime.now().millisecondsSinceEpoch}');
 
   /// Writes to a temp file then renames, so a crash never corrupts data.
   Future<void> writeFile(String name, Object value) async {

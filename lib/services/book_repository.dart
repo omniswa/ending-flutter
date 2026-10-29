@@ -67,11 +67,72 @@ class BookRepository {
     return Directory(p.join(root.path, 'books', '${book.id}'));
   }
 
-  /// Returns chapter texts + titles in order, downloading on first use.
-  Future<BookContent> loadContent(Book book) async {
-    final dir = await _bookDir(book);
-    if (_chapterFiles(dir).isEmpty) await _download(book, dir);
+  final Map<int, Future<BookContent>> _inFlight = {};
 
+  /// Returns chapter texts + titles in order, downloading on first use.
+  ///
+  /// Concurrent calls for the same book share a single download. [refresh]
+  /// forces a re-download; if that fails and a local copy exists, the local
+  /// copy is used instead of surfacing an error.
+  Future<BookContent> loadContent(Book book, {bool refresh = false}) {
+    final running = _inFlight[book.id];
+    if (running != null) return running;
+    final future = _loadContent(book, refresh: refresh)
+        .whenComplete(() {
+      // Block body on purpose: returning remove()'s value (this same future)
+      // would make whenComplete wait on itself.
+      _inFlight.remove(book.id);
+    });
+    return _inFlight[book.id] = future;
+  }
+
+  Future<bool> isDownloaded(Book book) async =>
+      _hasContent(await _bookDir(book));
+
+  /// Deletes the downloaded copy (reading progress is kept).
+  Future<void> deleteDownload(Book book) async {
+    await _inFlight[book.id]?.catchError((_) => const BookContent([], []));
+    final dir = await _bookDir(book);
+    if (dir.existsSync()) await dir.delete(recursive: true);
+  }
+
+  Future<BookContent> _loadContent(Book book, {required bool refresh}) async {
+    final dir = await _bookDir(book);
+    final hasLocal = _hasContent(dir);
+    final source = _readSource(dir);
+    // A changed zip URL in the catalog means the book was republished.
+    final needsDownload =
+        !hasLocal || refresh || (source != null && source != book.zip);
+    if (needsDownload) {
+      try {
+        await _download(book, dir);
+      } on Object catch (e) {
+        if (!hasLocal) rethrow;
+        debugPrint('Update for "${book.title}" failed, using local copy: $e');
+      }
+    }
+    return _readContent(dir);
+  }
+
+  bool _hasContent(Directory dir) {
+    if (_chapterFiles(dir).isNotEmpty) return true;
+    final manifest = _readManifest(dir);
+    return manifest != null &&
+        manifest.any((e) => File(p.join(dir.path, e.file)).existsSync());
+  }
+
+  static const _sourceFile = '.source';
+
+  String? _readSource(Directory dir) {
+    final f = File(p.join(dir.path, _sourceFile));
+    try {
+      return f.existsSync() ? f.readAsStringSync().trim() : null;
+    } on Object {
+      return null;
+    }
+  }
+
+  Future<BookContent> _readContent(Directory dir) async {
     final chapters = <String>[];
     final titles = <String?>[];
 
@@ -143,6 +204,9 @@ class BookRepository {
       for (final e in chapters.entries) {
         await File(p.join(tmp.path, e.key)).writeAsString(e.value, flush: true);
       }
+      // Remember which zip this copy came from, to detect republished books.
+      await File(p.join(tmp.path, _sourceFile))
+          .writeAsString(book.zip, flush: true);
       if (dir.existsSync()) await dir.delete(recursive: true);
       await tmp.rename(dir.path);
     } on Object {
@@ -159,8 +223,11 @@ Map<String, String> _extractChapters(Uint8List bytes) {
   for (final f in archive.files) {
     if (!f.isFile) continue;
     final name = p.basename(f.name);
-    if (name != 'manifest.json' && !RegExp(r'^\d+\.txt$').hasMatch(name))
-      continue;
+    // Keep the manifest and any .txt chapter (manifest entries may use
+    // names other than 1.txt, 2.txt...). Skip hidden/junk files.
+    final keep = name == 'manifest.json' ||
+        (name.endsWith('.txt') && !name.startsWith('.'));
+    if (!keep) continue;
     out[name] = utf8.decode(f.content as List<int>, allowMalformed: true);
   }
   return out;

@@ -13,6 +13,7 @@ import '../models/reading_progress.dart';
 import '../providers/reader_settings_provider.dart';
 import '../providers/user_data_provider.dart';
 import '../services/book_repository.dart';
+import '../widgets/common.dart';
 import '../widgets/reader_settings_sheet.dart';
 
 class ReaderScreen extends StatefulWidget {
@@ -76,13 +77,13 @@ class _ReaderScreenState extends State<ReaderScreen>
       _persist();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool refresh = false}) async {
     setState(() {
       _error = null;
       _chapters = null;
     });
     try {
-      final content = await _repo.loadContent(widget.book);
+      final content = await _repo.loadContent(widget.book, refresh: refresh);
       final chapters = content.chapters;
       if (!mounted) return;
       final saved = _user.progressFor(widget.book.id);
@@ -228,6 +229,22 @@ class _ReaderScreenState extends State<ReaderScreen>
     if (finish != true || !mounted) return;
     _user.setFinished(widget.book.id, finished: true);
     Navigator.of(context).maybePop();
+  }
+
+  /// Deletes the downloaded text (progress and favorites are kept) and leaves
+  /// the reader. The book downloads again the next time it's opened.
+  Future<void> _removeDownload() async {
+    final ok = await confirmDialog(
+      context,
+      title: 'Remove download?',
+      message: 'The book is deleted from this device. Your progress is kept '
+          'and you can download it again anytime.',
+      action: 'Remove',
+    );
+    if (!ok || !mounted) return;
+    _persist(); // save position before the content goes away
+    await _repo.deleteDownload(widget.book);
+    if (mounted) Navigator.of(context).maybePop();
   }
 
   void _toggleChrome() {
@@ -530,7 +547,16 @@ class _ReaderScreenState extends State<ReaderScreen>
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    onSelected: (_) => u.setFinished(id, finished: !done),
+                    onSelected: (v) {
+                      switch (v) {
+                        case 'finished':
+                          u.setFinished(id, finished: !done);
+                        case 'refresh':
+                          _load(refresh: true);
+                        case 'remove':
+                          _removeDownload();
+                      }
+                    },
                     itemBuilder: (_) => [
                       PopupMenuItem(
                         value: 'finished',
@@ -548,6 +574,30 @@ class _ReaderScreenState extends State<ReaderScreen>
                                   ? 'Mark as not finished'
                                   : 'Mark as finished',
                             ),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'refresh',
+                        child: Row(
+                          children: [
+                            Icon(Icons.refresh_rounded, size: 20),
+                            SizedBox(width: 12),
+                            Text('Re-download book'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'remove',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.delete_outline_rounded,
+                              size: 20,
+                              color: AppColors.danger,
+                            ),
+                            SizedBox(width: 12),
+                            Text('Remove download'),
                           ],
                         ),
                       ),

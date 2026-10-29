@@ -19,13 +19,18 @@ enum NoteExportFormat {
 
 class NotesProvider extends ChangeNotifier {
   NotesProvider(this._store) {
-    _load();
+    _loaded = _load();
   }
 
   static const _file = 'notes_v1.json';
   final LocalStore _store;
   final Map<String, Note> _notes = {};
   bool _loading = true;
+
+  /// True when the notes file exists but couldn't be read. Writing is then
+  /// disabled for the session so we never overwrite data we failed to load.
+  bool _readFailed = false;
+  late final Future<void> _loaded;
   Future<void> _writes = Future.value(); // serialises disk writes
 
   bool get loading => _loading;
@@ -37,16 +42,25 @@ class NotesProvider extends ChangeNotifier {
         ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
 
   Future<void> _load() async {
-    final data = await _store.readFile(_file);
-    if (data is List) {
-      for (final e in data) {
-        try {
-          final n = Note.fromJson(e as Map<String, dynamic>);
-          _notes[n.id] = n;
-        } on Object {
-          continue;
+    try {
+      final data = await _store.readFile(_file);
+      if (data is List) {
+        var skipped = 0;
+        for (final e in data) {
+          try {
+            final n = Note.fromJson(e as Map<String, dynamic>);
+            // Anything created while loading is newer; keep it.
+            _notes.putIfAbsent(n.id, () => n);
+          } on Object {
+            skipped++;
+          }
         }
+        // The next save drops unreadable entries, so keep a copy first.
+        if (skipped > 0) await _store.backupFile(_file);
       }
+    } on Object catch (e) {
+      _readFailed = true;
+      debugPrint('Loading notes failed: $e');
     }
     _loading = false;
     notifyListeners();
@@ -116,9 +130,15 @@ class NotesProvider extends ChangeNotifier {
 
   void _persist() {
     notifyListeners();
-    final snapshot = _notes.values.map((n) => n.toJson()).toList();
+    // Wait for the initial load, then snapshot at write time so the file
+    // always reflects the latest state (and includes the loaded notes).
     _writes = _writes
-        .then((_) => _store.writeFile(_file, snapshot))
+        .then((_) => _loaded)
+        .then((_) async {
+          if (_readFailed) return;
+          final snapshot = _notes.values.map((n) => n.toJson()).toList();
+          await _store.writeFile(_file, snapshot);
+        })
         .catchError((Object e) => debugPrint('Saving notes failed: $e'));
   }
 }

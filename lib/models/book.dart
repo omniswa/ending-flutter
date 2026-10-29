@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../core/config.dart';
 import '../core/formatters.dart';
 
 @immutable
@@ -19,8 +20,9 @@ class Book {
         author: (json['author'] as String).trim(),
         added: parseLongDate(json['added'] as String? ?? '') ??
             DateTime.fromMillisecondsSinceEpoch(0),
-        cover: json['cover'] as String,
-        zip: json['zip'] as String,
+        // Catalog paths may be relative to the books.json location.
+        cover: AppConfig.resolve(json['cover'] as String),
+        zip: AppConfig.resolve(json['zip'] as String),
       );
 
   final int id;

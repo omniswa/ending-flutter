@@ -10,6 +10,11 @@ abstract final class AppConfig {
     defaultValue: 'https://omniswa.github.io/ending-web-draft1/',
   );
   static const booksIndex = 'books.json';
+
+  /// Resolves a catalog path against [baseUrl]. Absolute URLs pass through
+  /// unchanged, so this is safe to call on already-resolved values.
+  static String resolve(String path) =>
+      Uri.parse(baseUrl).resolve(path.trim()).toString();
   static const requestTimeout = Duration(seconds: 20);
   static const wordsPerMinute = 220;
   static const charsPerWord = 5.8;

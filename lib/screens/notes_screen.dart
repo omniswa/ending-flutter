@@ -40,7 +40,7 @@ class NotesScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _open(context),
+        onPressed: provider.loading ? null : () => _open(context),
         tooltip: 'New note',
         elevation: 6,
         backgroundColor: AppColors.terracotta,
