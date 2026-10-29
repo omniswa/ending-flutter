@@ -29,10 +29,10 @@ class RecentCard extends StatelessWidget {
       width: width,
       height: height,
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(4),
         onTap: onTap,
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(4),
           child: Stack(
             fit: StackFit.expand,
             children: [

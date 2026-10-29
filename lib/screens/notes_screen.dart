@@ -28,6 +28,24 @@ class NotesScreen extends StatelessWidget {
     }
   }
 
+  Future<void> _exportAll(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final count = await context.read<NotesProvider>().exportAllNotes();
+      if (count != null) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Exported $count ${count == 1 ? 'note' : 'notes'}'),
+          ),
+        );
+      }
+    } on Object {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Couldn\'t export your notes.')),
+      );
+    }
+  }
+
   void _open(BuildContext context, [String? id]) => Navigator.of(
     context,
   ).push(MaterialPageRoute<void>(builder: (_) => NoteEditorScreen(noteId: id)));
@@ -57,11 +75,24 @@ class NotesScreen extends StatelessWidget {
             ScreenHeader(
               title: 'Notes',
               subtitle: notes.length == 1 ? '1 note' : '${notes.length} notes',
-              trailing: RoundIconButton(
-                icon: Icons.file_upload_outlined,
-                tooltip: 'Import .txt / .md',
-                onDark: true,
-                onTap: () => _import(context),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (notes.isNotEmpty)
+                    RoundIconButton(
+                      icon: Icons.archive_outlined,
+                      tooltip: 'Export all notes as ZIP',
+                      onDark: true,
+                      onTap: () => _exportAll(context),
+                    ),
+                  SizedBox(width: 10),
+                  RoundIconButton(
+                    icon: Icons.file_upload_outlined,
+                    tooltip: 'Import .txt / .md',
+                    onDark: true,
+                    onTap: () => _import(context),
+                  ),
+                ],
               ),
             ),
             Expanded(
@@ -81,7 +112,7 @@ class NotesScreen extends StatelessWidget {
                       padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
                       gridDelegate:
                           const SliverGridDelegateWithMaxCrossAxisExtent(
-                            maxCrossAxisExtent: 240,
+                            maxCrossAxisExtent: 200,
                             mainAxisExtent: 196,
                             mainAxisSpacing: 12,
                             crossAxisSpacing: 12,
@@ -124,7 +155,7 @@ class _NoteCard extends StatelessWidget {
         .noteColors[note.colorIndex.clamp(0, AppColors.noteColors.length - 1)];
     return SoftCard(
       color: color,
-      radius: 10,
+      radius: 4,
       padding: const EdgeInsets.fromLTRB(16, 14, 6, 12),
       onTap: onTap,
       onLongPress: () => _delete(context),

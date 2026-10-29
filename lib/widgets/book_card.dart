@@ -52,7 +52,7 @@ class BookCard extends StatelessWidget {
 
     return SoftCard(
       padding: EdgeInsets.zero,
-      radius: 10,
+      radius: 4,
       onTap: onTap,
       child: LayoutBuilder(
         builder: (context, c) => Stack(
@@ -208,7 +208,7 @@ class _Badge extends StatelessWidget {
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
     decoration: BoxDecoration(
       color: AppColors.sage,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(4),
     ),
     child: Text(
       label,

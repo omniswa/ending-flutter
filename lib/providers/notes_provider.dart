@@ -1,6 +1,6 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
+import 'package:archive/archive.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
@@ -126,6 +126,46 @@ class NotesProvider extends ChangeNotifier {
       bytes: Uint8List.fromList(utf8.encode(text.toString())),
     );
     return saved != null;
+  }
+
+  /// Saves all notes as Markdown files in a ZIP archive. Returns null if
+  /// the save dialog was cancelled.
+  Future<int?> exportAllNotes() async {
+    final snapshot = notes;
+    if (snapshot.isEmpty) return 0;
+
+    final archive = Archive();
+    final usedNames = <String>{};
+    for (final note in snapshot) {
+      final heading = note.title.trim();
+      final text = StringBuffer();
+      if (heading.isNotEmpty) text.write('# $heading\n\n');
+      text
+        ..write(note.body.trimRight())
+        ..write('\n');
+
+      final safe = note.displayTitle
+          .replaceAll(RegExp(r'[\\/:*?"<>|\x00-\x1F]'), '_')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+      final baseName = safe.isEmpty ? 'Untitled' : safe;
+      var fileName = '$baseName.md';
+      var suffix = 2;
+      while (!usedNames.add(fileName)) {
+        fileName = '$baseName ($suffix).md';
+        suffix++;
+      }
+
+      final bytes = utf8.encode(text.toString());
+      archive.addFile(ArchiveFile(fileName, bytes.length, bytes));
+    }
+
+    final saved = await FilePicker.saveFile(
+      dialogTitle: 'Export all notes',
+      fileName: 'notes.zip',
+      bytes: ZipEncoder().encodeBytes(archive),
+    );
+    return saved == null ? null : snapshot.length;
   }
 
   void _persist() {

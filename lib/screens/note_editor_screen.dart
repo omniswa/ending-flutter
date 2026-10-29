@@ -31,7 +31,10 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     super.initState();
     _notes = context.read<NotesProvider>();
     _note = widget.noteId == null ? null : _notes.byId(widget.noteId!);
-    _color = (_note?.colorIndex ?? Note.defaultColorIndex).clamp(0, AppColors.noteColors.length - 1);
+    _color = (_note?.colorIndex ?? Note.defaultColorIndex).clamp(
+      0,
+      AppColors.noteColors.length - 1,
+    );
     _title = TextEditingController(text: _note?.title ?? '');
     _body = TextEditingController(text: _note?.body ?? '');
     _title.addListener(_onChanged);
@@ -70,7 +73,12 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
 
   Future<void> _delete() async {
     final nav = Navigator.of(context);
-    final ok = await confirmDialog(context, title: 'Delete note?', message: 'This can\'t be undone.', action: 'Delete');
+    final ok = await confirmDialog(
+      context,
+      title: 'Delete note?',
+      message: 'This can\'t be undone.',
+      action: 'Delete',
+    );
     if (!ok) return;
     _debounce?.cancel();
     _deleted = true;
@@ -94,12 +102,22 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
           backgroundColor: bg,
           actions: [
             IconButton(
-              onPressed: () => exportNote(context, title: _title.text, body: _body.text),
+              onPressed: () =>
+                  exportNote(context, title: _title.text, body: _body.text),
               icon: const Icon(Icons.ios_share_rounded),
               tooltip: 'Export',
             ),
-            if (_note != null) IconButton(onPressed: _delete, icon: const Icon(Icons.delete_outline_rounded), tooltip: 'Delete'),
-            IconButton(onPressed: () => Navigator.maybePop(context), icon: const Icon(Icons.check_rounded), tooltip: 'Done'),
+            if (_note != null)
+              IconButton(
+                onPressed: _delete,
+                icon: const Icon(Icons.delete_outline_rounded),
+                tooltip: 'Delete',
+              ),
+            IconButton(
+              onPressed: () => Navigator.maybePop(context),
+              icon: const Icon(Icons.check_rounded),
+              tooltip: 'Done',
+            ),
           ],
         ),
         body: SafeArea(
@@ -111,7 +129,10 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                   controller: _title,
                   textCapitalization: TextCapitalization.sentences,
                   style: t.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
-                  decoration: const InputDecoration(hintText: 'Title', border: InputBorder.none),
+                  decoration: const InputDecoration(
+                    hintText: 'Title',
+                    border: InputBorder.none,
+                  ),
                 ),
                 Expanded(
                   child: TextField(
@@ -122,32 +143,45 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                     keyboardType: TextInputType.multiline,
                     textCapitalization: TextCapitalization.sentences,
                     style: t.bodyLarge?.copyWith(height: 1.55),
-                    decoration: const InputDecoration(hintText: 'Start writing…', border: InputBorder.none),
+                    decoration: const InputDecoration(
+                      hintText: 'Start writing…',
+                      border: InputBorder.none,
+                    ),
                   ),
                 ),
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: Row(children: [
-                    for (final i in AppColors.noteColorOrder)
-                      GestureDetector(
-                        onTap: () {
-                          setState(() => _color = i);
-                          _save();
-                        },
-                        child: Container(
-                          width: 28,
-                          height: 28,
-                          margin: const EdgeInsets.only(right: 10),
-                          decoration: BoxDecoration(
-                            color: AppColors.noteColors[i],
-                            shape: BoxShape.circle,
-                            border: Border.all(color: i == _color ? AppColors.ink : Colors.black26, width: i == _color ? 2 : 1),
+                  child: Row(
+                    children: [
+                      for (final i in AppColors.noteColorOrder)
+                        GestureDetector(
+                          onTap: () {
+                            setState(() => _color = i);
+                            _save();
+                          },
+                          child: Container(
+                            width: 28,
+                            height: 28,
+                            margin: const EdgeInsets.only(right: 10),
+                            decoration: BoxDecoration(
+                              color: AppColors.noteColors[i],
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: i == _color
+                                    ? AppColors.ink
+                                    : Colors.black26,
+                                width: i == _color ? 2 : 1,
+                              ),
+                            ),
                           ),
                         ),
+                      const Spacer(),
+                      Text(
+                        '$words ${words == 1 ? 'word' : 'words'}',
+                        style: t.labelMedium?.copyWith(color: AppColors.muted),
                       ),
-                    const Spacer(),
-                    Text('$words ${words == 1 ? 'word' : 'words'}', style: t.labelMedium?.copyWith(color: AppColors.muted)),
-                  ]),
+                    ],
+                  ),
                 ),
               ],
             ),

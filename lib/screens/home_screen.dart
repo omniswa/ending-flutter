@@ -123,10 +123,11 @@ class _HomeScreenState extends State<HomeScreen> {
     return ScreenHeader(
       title: AppConfig.appName,
       subtitle: AppConfig.tagline,
+      subtitleFontSize: 12,
       letterSpacing: 1.6,
       bottom: DecoratedBox(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.18),
@@ -159,7 +160,7 @@ class _HomeScreenState extends State<HomeScreen> {
             filled: true,
             fillColor: AppColors.surface,
             contentPadding: const EdgeInsets.symmetric(
-              vertical: 0,
+              vertical: 4,
               horizontal: 0,
             ),
             border: OutlineInputBorder(

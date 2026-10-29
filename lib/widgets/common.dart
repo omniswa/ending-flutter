@@ -220,12 +220,14 @@ class ScreenHeader extends StatelessWidget {
     this.trailing,
     this.bottom,
     this.letterSpacing = 0,
+    this.subtitleFontSize,
   });
   final String title;
   final String? subtitle;
   final Widget? trailing;
   final Widget? bottom;
   final double letterSpacing;
+  final double? subtitleFontSize;
 
   @override
   Widget build(BuildContext context) {
@@ -290,6 +292,7 @@ class ScreenHeader extends StatelessWidget {
                                 subtitle!,
                                 style: t.bodyMedium?.copyWith(
                                   color: Colors.white.withValues(alpha: 0.78),
+                                  fontSize: subtitleFontSize,
                                 ),
                               ),
                             ],
