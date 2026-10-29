@@ -235,7 +235,19 @@ class _FavoriteCard extends StatelessWidget {
       book: book,
       progress: item.progress,
       finished: finished,
-      onTap: () => ReaderScreen.open(context, book),
+      onTap: () async {
+        await ReaderScreen.open(context, book);
+        if (!context.mounted) return;
+        try {
+          await context.read<LibraryProvider>().refreshDownloadStatus(book);
+        } on Object catch (error) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Could not check offline status: $error')),
+            );
+          }
+        }
+      },
       trailing: PopupMenuButton<String>(
         tooltip: 'More',
         padding: EdgeInsets.zero,
@@ -246,8 +258,8 @@ class _FavoriteCard extends StatelessWidget {
         ),
         style: IconButton.styleFrom(
           backgroundColor: Colors.white.withValues(alpha: 0.85),
-          fixedSize: const Size(28, 28),
-          minimumSize: const Size(28, 28),
+          fixedSize: const Size(32, 32),
+          minimumSize: const Size(32, 32),
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),

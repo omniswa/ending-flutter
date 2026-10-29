@@ -73,7 +73,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 slivers: [
                   if (recent.isNotEmpty) ...[
                     const SliverToBoxAdapter(
-                      child: SectionTitle('Continue reading'),
+                      child: SectionTitle('CONTINUE READING'),
                     ),
                     SliverToBoxAdapter(
                       child: SizedBox(
@@ -87,8 +87,16 @@ class _HomeScreenState extends State<HomeScreen> {
                           itemBuilder: (_, i) => RecentCard(
                             book: recent[i].$1,
                             progress: recent[i].$2,
-                            onTap: () =>
-                                ReaderScreen.open(context, recent[i].$1),
+                            onTap: () async {
+                              await ReaderScreen.open(context, recent[i].$1);
+                              if (context.mounted) {
+                                await _refreshOfflineStatus(
+                                  context,
+                                  lib,
+                                  recent[i].$1,
+                                );
+                              }
+                            },
                           ),
                         ),
                       ),
@@ -96,7 +104,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                   SliverToBoxAdapter(
                     child: SectionTitle(
-                      searching ? 'Results' : 'Library',
+                      searching ? 'RESULTS' : 'LIBRARY',
                       trailing: lib.state == LoadState.ready
                           ? Text(
                               books.length == 1
@@ -231,10 +239,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 progress: user.progressFor(books[i].id),
                 finished: user.isFinished(books[i].id),
                 favorite: user.isFavorite(books[i].id),
+                downloaded: lib.isDownloaded(books[i].id),
+                checkingDownload: lib.isCheckingDownload(books[i].id),
+                downloading: lib.isDownloading(books[i].id),
                 onFavorite: () {
                   HapticFeedback.selectionClick();
                   user.toggleFavorite(books[i].id);
                 },
+                onDownload: () => _downloadBook(context, lib, books[i]),
               ),
             ),
           ),
@@ -250,41 +262,179 @@ class _LibraryCard extends StatelessWidget {
     required this.progress,
     required this.finished,
     required this.favorite,
+    required this.downloaded,
+    required this.checkingDownload,
+    required this.downloading,
     required this.onFavorite,
+    required this.onDownload,
   });
   final Book book;
   final ReadingProgress? progress;
   final bool finished;
   final bool favorite;
+  final bool downloaded;
+  final bool checkingDownload;
+  final bool downloading;
   final VoidCallback onFavorite;
+  final VoidCallback onDownload;
 
   @override
   Widget build(BuildContext context) => BookCard(
     book: book,
     progress: progress,
     finished: finished,
-    onTap: () => ReaderScreen.open(context, book),
-    trailing: IconButton(
-      tooltip: favorite ? 'Remove from favorites' : 'Add to favorites',
-      onPressed: onFavorite,
+    onTap: () async {
+      await ReaderScreen.open(context, book);
+      if (context.mounted) {
+        await _refreshOfflineStatus(
+          context,
+          context.read<LibraryProvider>(),
+          book,
+        );
+      }
+    },
+    trailing: Column(
+      children: [
+        IconButton(
+          tooltip: favorite ? 'Remove from favorites' : 'Add to favorites',
+          onPressed: onFavorite,
+          padding: EdgeInsets.zero,
+          style: IconButton.styleFrom(
+            backgroundColor: Colors.white.withValues(alpha: 0.85),
+            fixedSize: const Size(32, 32),
+            minimumSize: const Size(32, 32),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          icon: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 180),
+            transitionBuilder: (child, anim) =>
+                ScaleTransition(scale: anim, child: child),
+            child: Icon(
+              favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+              key: ValueKey(favorite),
+              size: 18,
+              color: favorite ? AppColors.terracotta : AppColors.muted,
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        _DownloadControl(
+          downloaded: downloaded,
+          checking: checkingDownload,
+          downloading: downloading,
+          onPressed: onDownload,
+        ),
+      ],
+    ),
+  );
+}
+
+class _DownloadControl extends StatelessWidget {
+  const _DownloadControl({
+    required this.downloaded,
+    required this.checking,
+    required this.downloading,
+    required this.onPressed,
+  });
+
+  final bool downloaded;
+  final bool checking;
+  final bool downloading;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    if (downloaded) {
+      return Tooltip(
+        message: 'Available offline',
+        child: Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.9),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(
+            Icons.cloud_done_rounded,
+            size: 18,
+            color: AppColors.sage,
+          ),
+        ),
+      );
+    }
+    if (checking || downloading) {
+      return Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.85),
+          shape: BoxShape.circle,
+        ),
+        alignment: Alignment.center,
+        child: SizedBox(
+          width: 14,
+          height: 14,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: AppColors.sage,
+          ),
+        ),
+      );
+    }
+    return IconButton(
+      tooltip: 'Download for offline reading',
+      onPressed: onPressed,
       padding: EdgeInsets.zero,
       style: IconButton.styleFrom(
         backgroundColor: Colors.white.withValues(alpha: 0.85),
-        fixedSize: const Size(28, 28),
-        minimumSize: const Size(28, 28),
+        fixedSize: const Size(32, 32),
+        minimumSize: const Size(32, 32),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
-      icon: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 180),
-        transitionBuilder: (child, anim) =>
-            ScaleTransition(scale: anim, child: child),
-        child: Icon(
-          favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-          key: ValueKey(favorite),
-          size: 18,
-          color: favorite ? AppColors.terracotta : AppColors.muted,
-        ),
+      icon: const Icon(
+        Icons.cloud_download_rounded,
+        size: 18,
+        color: AppColors.muted,
       ),
-    ),
-  );
+    );
+  }
+}
+
+Future<void> _downloadBook(
+  BuildContext context,
+  LibraryProvider library,
+  Book book,
+) async {
+  try {
+    await library.download(book);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('"${book.title}" has been downloaded successfully.'),
+        ),
+      );
+    }
+  } on Object catch (error) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not download "${book.title}": $error')),
+      );
+    }
+  }
+}
+
+Future<void> _refreshOfflineStatus(
+  BuildContext context,
+  LibraryProvider library,
+  Book book,
+) async {
+  try {
+    await library.refreshDownloadStatus(book);
+  } on Object catch (error) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not check offline status: $error')),
+      );
+    }
+  }
 }

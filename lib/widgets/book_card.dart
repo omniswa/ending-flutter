@@ -30,9 +30,9 @@ class BookCard extends StatelessWidget {
   final Widget? trailing;
 
   /// Shared grid layout so Home, Favorites and the skeleton line up.
-  /// Portrait, book-cover proportions; three columns on a typical phone.
-  static const gridDelegate = SliverGridDelegateWithMaxCrossAxisExtent(
-    maxCrossAxisExtent: 130,
+  /// Two columns keep cover details and controls legible on phones.
+  static const gridDelegate = SliverGridDelegateWithFixedCrossAxisCount(
+    crossAxisCount: 2,
     childAspectRatio: 0.62,
     mainAxisSpacing: 10,
     crossAxisSpacing: 10,

@@ -3,7 +3,7 @@ abstract final class AppConfig {
   static const appName = '3NDING';
   static const tagline = 'READ MORE · DISCOVER MORE';
 
-  /// Where `books.json` and the book zips are hosted. Must end with '/'.
+  /// Where `books.json` and book files (ZIP or EPUB) are hosted. Must end with '/'.
   /// Override: `--dart-define=BASE_URL=https://example.com/`
   static const baseUrl = String.fromEnvironment(
     'BASE_URL',

@@ -17,12 +17,18 @@ class LibraryProvider extends ChangeNotifier {
   Object? _error;
   String _query = '';
   List<Book>? _filtered;
+  final Set<int> _downloaded = {};
+  final Set<int> _checkingDownloads = {};
+  final Set<int> _downloading = {};
 
   LoadState get state => _state;
   List<Book> get books => _books;
   String? get errorMessage => _error?.toString();
   String get query => _query;
   Book? byId(int id) => _index[id];
+  bool isDownloaded(int id) => _downloaded.contains(id);
+  bool isCheckingDownload(int id) => _checkingDownloads.contains(id);
+  bool isDownloading(int id) => _downloading.contains(id);
 
   /// Books matching the title/author search. Cached until the query or
   /// catalog changes, so rebuilds while scrolling stay cheap.
@@ -51,12 +57,48 @@ class LibraryProvider extends ChangeNotifier {
       _index = {for (final b in list) b.id: b};
       _filtered = null;
       _state = LoadState.ready;
+      for (final book in list) {
+        refreshDownloadStatus(book).catchError((Object error, StackTrace stack) {
+          debugPrint('Checking offline status for "${book.title}" failed: $error\n$stack');
+        });
+      }
     } on Object catch (e, st) {
       _error = e;
       debugPrint('Library load failed: $e\n$st');
       if (_books.isEmpty) _state = LoadState.error;
     }
     notifyListeners();
+  }
+
+  Future<void> refreshDownloadStatus(Book book) async {
+    _checkingDownloads.add(book.id);
+    notifyListeners();
+    try {
+      final downloaded = await _repo.isDownloaded(book);
+      if (!_downloading.contains(book.id)) {
+        if (downloaded) {
+          _downloaded.add(book.id);
+        } else {
+          _downloaded.remove(book.id);
+        }
+      }
+    } finally {
+      _checkingDownloads.remove(book.id);
+      notifyListeners();
+    }
+  }
+
+  Future<void> download(Book book) async {
+    if (_downloading.contains(book.id)) return;
+    _downloading.add(book.id);
+    notifyListeners();
+    try {
+      await _repo.loadContent(book);
+      _downloaded.add(book.id);
+    } finally {
+      _downloading.remove(book.id);
+      notifyListeners();
+    }
   }
 
   void setQuery(String value) {

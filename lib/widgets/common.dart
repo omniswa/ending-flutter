@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../core/theme.dart';
 
@@ -111,8 +112,11 @@ class SectionTitle extends StatelessWidget {
         ),
         Text(
           title,
-          style: Theme.of(context).textTheme.titleLarge
-              ?.copyWith(fontWeight: FontWeight.w700),
+          style: GoogleFonts.fraunces(
+            textStyle: Theme.of(context).textTheme.titleLarge,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         const Spacer(),
         if (trailing != null) trailing!,

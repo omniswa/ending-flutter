@@ -2,6 +2,13 @@
 
 A new Flutter project.
 
+## Book catalog
+
+Book entries in `books.json` can use the existing `zip` source, an `epub`
+source, or a generic `file` source (detected as EPUB when its path ends in
+`.epub`). EPUBs are downloaded and read in their declared spine order; ZIP
+chapter bundles continue to work as before.
+
 ## Bundled fonts (offline reading)
 
 The reader uses `google_fonts`, which downloads fonts on first use. To make it
