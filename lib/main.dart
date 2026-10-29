@@ -1,4 +1,7 @@
+import 'dart:ui' show PlatformDispatcher;
+
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -14,6 +17,19 @@ import 'services/local_store.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  GoogleFonts.config.allowRuntimeFetching = !AppConfig.bundledFonts;
+
+  // Last-resort logging so a failed async write or stray exception is
+  // visible instead of vanishing. Hook a crash reporter in here later.
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    debugPrint('Flutter error: ${details.exceptionAsString()}');
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('Uncaught error: $error\n$stack');
+    return true;
+  };
+
   final store = LocalStore(await SharedPreferences.getInstance());
 
   runApp(

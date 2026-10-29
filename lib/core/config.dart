@@ -9,6 +9,12 @@ abstract final class AppConfig {
     'BASE_URL',
     defaultValue: 'https://omniswa.github.io/ending-web-draft1/',
   );
+  /// Set to true once the font files are in assets/google_fonts/ (see the
+  /// README). With it on, google_fonts never touches the network, so the
+  /// reader works offline and text never reflows when a font arrives late.
+  /// Leave it false until then: a missing bundled font would throw.
+  static const bundledFonts = false;
+
   static const booksIndex = 'books.json';
 
   /// Resolves a catalog path against [baseUrl]. Absolute URLs pass through

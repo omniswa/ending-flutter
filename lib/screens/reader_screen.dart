@@ -64,6 +64,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     WidgetsBinding.instance.removeObserver(this);
     _saveTimer?.cancel();
     _hintTimer?.cancel();
+    _user.flush();
     _scroll.dispose();
     _fraction.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -73,8 +74,10 @@ class _ReaderScreenState extends State<ReaderScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive)
+        state == AppLifecycleState.inactive) {
       _persist();
+      _user.flush(); // don't leave the last position waiting on a timer
+    }
   }
 
   Future<void> _load({bool refresh = false}) async {
@@ -102,11 +105,16 @@ class _ReaderScreenState extends State<ReaderScreen>
     }
   }
 
-  void _restoreScroll() {
+  /// Jumps to the saved fraction of the chapter. The lazy list only estimates
+  /// its total height until paragraphs are laid out, so jump once, then once
+  /// more on the next frame to correct for the refined estimate.
+  void _restoreScroll({int passes = 2}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scroll.hasClients) return;
       final max = _scroll.position.maxScrollExtent;
-      _scroll.jumpTo((max * _fraction.value).clamp(0, max).toDouble());
+      final target = (max * _fraction.value).clamp(0, max).toDouble();
+      if ((_scroll.offset - target).abs() > 1) _scroll.jumpTo(target);
+      if (passes > 1) _restoreScroll(passes: passes - 1);
     });
   }
 
@@ -322,11 +330,8 @@ class _ReaderScreenState extends State<ReaderScreen>
     }
 
     final media = MediaQuery.of(context);
-    final style = prefs.textStyle;
-    final paragraphs = chapters[_chapter]
-        .replaceAll('\r\n', '\n')
-        .trim()
-        .split(RegExp(r'\n\s*\n'));
+    final style = _styleFor(prefs);
+    final paragraphs = _paragraphsFor(chapters[_chapter]);
     final isLast = _chapter == chapters.length - 1;
 
     return GestureDetector(
@@ -335,62 +340,121 @@ class _ReaderScreenState extends State<ReaderScreen>
       onHorizontalDragEnd: _onSwipe,
       child: NotificationListener<ScrollNotification>(
         onNotification: _onScroll,
-        child: SingleChildScrollView(
+        // Slivers so only the paragraphs near the viewport are laid out;
+        // the header and footer are single boxes around the lazy list.
+        child: CustomScrollView(
           controller: _scroll,
-          padding: EdgeInsets.fromLTRB(
-            prefs.margin,
-            media.padding.top + 76,
-            prefs.margin,
-            media.padding.bottom + 100,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Text(
-                  'CHAPTER ${_chapter + 1}',
-                  style: TextStyle(
-                    color: theme.fg.withValues(alpha: 0.55),
-                    letterSpacing: 3,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+          slivers: [
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                prefs.margin,
+                media.padding.top + 76,
+                prefs.margin,
+                media.padding.bottom + 100,
+              ),
+              sliver: SliverMainAxisGroup(
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: _chapterHeader(theme, style),
                   ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Center(
-                child: Container(
-                  width: 32,
-                  height: 2,
-                  color: AppColors.terracotta,
-                ),
-              ),
-              if (_titles[_chapter] != null) ...[
-                const SizedBox(height: 16),
-                Center(
-                  child: Text(
-                    _titles[_chapter]!,
-                    textAlign: TextAlign.center,
-                    style: style.copyWith(
-                      fontSize: style.fontSize! + 4,
-                      fontWeight: FontWeight.w700,
+                  SliverList.builder(
+                    itemCount: paragraphs.length,
+                    itemBuilder: (_, i) => Padding(
+                      padding: EdgeInsets.only(bottom: prefs.fontSize * 0.9),
+                      child: Text(
+                        paragraphs[i],
+                        textAlign: prefs.align,
+                        style: style,
+                      ),
                     ),
                   ),
-                ),
-              ],
-              const SizedBox(height: 28),
-              for (final p in paragraphs)
-                Padding(
-                  padding: EdgeInsets.only(bottom: prefs.fontSize * 0.9),
-                  child: Text(p.trim(), textAlign: prefs.align, style: style),
-                ),
-              const SizedBox(height: 16),
-              _endFooter(theme, isLast),
-            ],
-          ),
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 16),
+                      child: _endFooter(theme, isLast),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
+  }
+
+  /// "CHAPTER n" label, accent rule and optional title above the text.
+  Widget _chapterHeader(ReaderTheme theme, TextStyle style) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+      Center(
+        child: Text(
+          'CHAPTER ${_chapter + 1}',
+          style: TextStyle(
+            color: theme.fg.withValues(alpha: 0.55),
+            letterSpacing: 3,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+      const SizedBox(height: 10),
+      Center(
+        child: Container(
+          width: 32,
+          height: 2,
+          color: AppColors.terracotta,
+        ),
+      ),
+      if (_titles[_chapter] != null) ...[
+        const SizedBox(height: 16),
+        Center(
+          child: Text(
+            _titles[_chapter]!,
+            textAlign: TextAlign.center,
+            style: style.copyWith(
+              fontSize: style.fontSize! + 4,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+      const SizedBox(height: 28),
+      ],
+    );
+  }
+
+  // Cached per chapter: splitting a long chapter on every rebuild (each
+  // slider tick, each scroll-driven setState) was wasted work.
+  List<String>? _paraCache;
+  String? _paraSource;
+
+  List<String> _paragraphsFor(String text) {
+    if (_paraCache == null || !identical(_paraSource, text)) {
+      _paraSource = text;
+      _paraCache = text
+          .replaceAll('\r\n', '\n')
+          .trim()
+          .split(RegExp(r'\n\s*\n'))
+          .map((p) => p.trim())
+          .where((p) => p.isNotEmpty)
+          .toList(growable: false);
+    }
+    return _paraCache!;
+  }
+
+  // GoogleFonts.getFont builds a fresh style each call; reuse it until the
+  // preferences object changes.
+  ReaderPrefs? _styleSource;
+  TextStyle? _styleCache;
+
+  TextStyle _styleFor(ReaderPrefs prefs) {
+    if (_styleCache == null || !identical(_styleSource, prefs)) {
+      _styleSource = prefs;
+      _styleCache = prefs.textStyle;
+    }
+    return _styleCache!;
   }
 
   /// Quiet end-of-chapter cue in place of the old Previous/Next buttons.
@@ -709,7 +773,10 @@ class _ReaderScreenState extends State<ReaderScreen>
           controller: controller,
           itemCount: chapters.length,
           itemBuilder: (_, i) {
-            final preview = chapters[i].trim().replaceAll(RegExp(r'\s+'), ' ');
+            // One line is all that's shown, so only look at the start.
+            final text = chapters[i];
+            final head = text.length > 240 ? text.substring(0, 240) : text;
+            final preview = head.trim().replaceAll(RegExp(r'\s+'), ' ');
             return ListTile(
               selected: i == _chapter,
               selectedColor: AppColors.sage,

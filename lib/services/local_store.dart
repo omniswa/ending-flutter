@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -21,8 +22,16 @@ class LocalStore {
     }
   }
 
-  Future<void> writeJson(String key, Object value) =>
-      _prefs.setString(key, jsonEncode(value));
+  /// Never throws: callers mostly fire-and-forget, and an unhandled async
+  /// error here would otherwise go unnoticed. Returns whether it was saved.
+  Future<bool> writeJson(String key, Object value) async {
+    try {
+      return await _prefs.setString(key, jsonEncode(value));
+    } on Object catch (e) {
+      debugPrint('Saving "$key" failed: $e');
+      return false;
+    }
+  }
 
   Future<File> _file(String name) async {
     final dir = await getApplicationSupportDirectory();

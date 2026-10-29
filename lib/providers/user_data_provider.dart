@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../models/favorite_entry.dart';
@@ -96,10 +98,43 @@ class UserDataProvider extends ChangeNotifier {
     _saveFavs();
   }
 
+  /// Records reading progress. The in-memory value is always current, but
+  /// listeners are only notified when something a list screen shows has
+  /// changed (chapter, whole-percent or time left), and the disk write is
+  /// coalesced, so scrolling doesn't rebuild the library grids or rewrite
+  /// every book's progress on each save.
   void saveProgress(ReadingProgress p) {
+    final old = _progress[p.bookId];
     _progress[p.bookId] = p;
-    _store.writeJson(_progressKey, _progress.values.map((e) => e.toJson()).toList());
-    notifyListeners();
+    _scheduleProgressWrite();
+    final visibleChange = old == null ||
+        old.chapter != p.chapter ||
+        (old.percent * 100).round() != (p.percent * 100).round() ||
+        old.minutesLeft != p.minutesLeft;
+    if (visibleChange) notifyListeners();
+  }
+
+  Timer? _progressTimer;
+
+  void _scheduleProgressWrite() {
+    _progressTimer ??= Timer(const Duration(milliseconds: 500), flush);
+  }
+
+  /// Writes pending progress to disk now (app pause, reader closed).
+  void flush() {
+    if (_progressTimer == null) return;
+    _progressTimer!.cancel();
+    _progressTimer = null;
+    _store.writeJson(
+      _progressKey,
+      _progress.values.map((e) => e.toJson()).toList(),
+    );
+  }
+
+  @override
+  void dispose() {
+    flush();
+    super.dispose();
   }
 
   void _saveFavs() {
