@@ -50,15 +50,14 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   }
 
   void _onChanged() {
-    setState(() {}); // refresh word count
+    setState(() {}); 
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 500), _save);
   }
 
-  /// Saves unless the note is brand new and still empty.
   void _save() {
     _debounce?.cancel();
-    if (_deleted) return; // popping after delete must not resurrect the note
+    if (_deleted) return; 
     final title = _title.text.trim();
     final body = _body.text;
     if (_note == null && title.isEmpty && body.trim().isEmpty) return;
@@ -128,7 +127,10 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                 TextField(
                   controller: _title,
                   textCapitalization: TextCapitalization.sentences,
-                  style: t.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+                  style: googleFontStyleWithWeight(
+                    t.headlineSmall,
+                    FontWeight.w800,
+                  ),
                   decoration: const InputDecoration(
                     hintText: 'Title',
                     border: InputBorder.none,

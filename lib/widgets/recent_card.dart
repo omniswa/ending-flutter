@@ -7,7 +7,6 @@ import '../models/book.dart';
 import '../models/reading_progress.dart';
 import 'common.dart';
 
-/// Compact, full-bleed card for the "Continue reading" row.
 class RecentCard extends StatelessWidget {
   const RecentCard({
     super.key,
@@ -88,10 +87,10 @@ class RecentCard extends StatelessWidget {
                           children: [
                             Text(
                               formatPercent(progress.percent),
-                              style: t.labelSmall?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                              ),
+                              style: googleFontStyleWithWeight(
+                                t.labelSmall,
+                                FontWeight.w700,
+                              )?.copyWith(color: Colors.white),
                             ),
                             Flexible(
                               child: Text(

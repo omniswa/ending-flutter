@@ -50,7 +50,6 @@ class BookCover extends StatelessWidget {
   );
 }
 
-/// A raised card: soft layered shadow, generous radius.
 class SoftCard extends StatelessWidget {
   const SoftCard({
     super.key,
@@ -137,7 +136,6 @@ class RoundIconButton extends StatelessWidget {
   final String tooltip;
   final VoidCallback onTap;
 
-  /// Frosted-glass style for use on top of the gradient [ScreenHeader].
   final bool onDark;
 
   @override
@@ -191,7 +189,7 @@ class EmptyState extends StatelessWidget {
             const SizedBox(height: 20),
             Text(
               title,
-              style: t.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              style: googleFontStyleWithWeight(t.titleMedium, FontWeight.w700),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 6),
@@ -214,8 +212,6 @@ class EmptyState extends StatelessWidget {
   }
 }
 
-/// Gradient banner at the top of each tab: title, subtitle, optional
-/// trailing action and optional bottom content (e.g. a search field).
 class ScreenHeader extends StatelessWidget {
   const ScreenHeader({
     super.key,
@@ -284,11 +280,14 @@ class ScreenHeader extends StatelessWidget {
                           children: [
                             Text(
                               title,
-                              style: t.headlineMedium?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: letterSpacing,
-                              ),
+                              style:
+                                  googleFontStyleWithWeight(
+                                    t.headlineMedium,
+                                    FontWeight.w700,
+                                  )?.copyWith(
+                                    color: Colors.white,
+                                    letterSpacing: letterSpacing,
+                                  ),
                             ),
                             if (subtitle != null) ...[
                               const SizedBox(height: 4),
@@ -317,7 +316,6 @@ class ScreenHeader extends StatelessWidget {
   }
 }
 
-/// Thin reading-progress bar used on book cards.
 class ProgressBar extends StatelessWidget {
   const ProgressBar({
     super.key,
@@ -343,7 +341,6 @@ class ProgressBar extends StatelessWidget {
   );
 }
 
-/// Shows a short snackbar with an UNDO action, replacing any current one.
 void showUndoSnack(BuildContext context, String message, VoidCallback onUndo) {
   ScaffoldMessenger.of(context)
     ..clearSnackBars()

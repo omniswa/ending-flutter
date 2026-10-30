@@ -27,16 +27,13 @@ class NotesProvider extends ChangeNotifier {
   final Map<String, Note> _notes = {};
   bool _loading = true;
 
-  /// True when the notes file exists but couldn't be read. Writing is then
-  /// disabled for the session so we never overwrite data we failed to load.
   bool _readFailed = false;
   late final Future<void> _loaded;
-  Future<void> _writes = Future.value(); // serialises disk writes
+  Future<void> _writes = Future.value();
 
   bool get loading => _loading;
   Note? byId(String id) => _notes[id];
 
-  /// Most recently edited first.
   List<Note> get notes =>
       _notes.values.toList()
         ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
@@ -49,13 +46,11 @@ class NotesProvider extends ChangeNotifier {
         for (final e in data) {
           try {
             final n = Note.fromJson(e as Map<String, dynamic>);
-            // Anything created while loading is newer; keep it.
             _notes.putIfAbsent(n.id, () => n);
           } on Object {
             skipped++;
           }
         }
-        // The next save drops unreadable entries, so keep a copy first.
         if (skipped > 0) await _store.backupFile(_file);
       }
     } on Object catch (e) {
@@ -77,7 +72,6 @@ class NotesProvider extends ChangeNotifier {
     return removed;
   }
 
-  /// Imports .txt / .md files as notes. Returns how many were imported.
   Future<int> importFiles() async {
     final files = await FilePicker.pickFiles(
       type: FileType.custom,
@@ -99,7 +93,6 @@ class NotesProvider extends ChangeNotifier {
     return count;
   }
 
-  /// Saves one note to a file the person picks. Returns false if they cancel.
   Future<bool> exportNote({
     required String title,
     required String body,
@@ -128,8 +121,6 @@ class NotesProvider extends ChangeNotifier {
     return saved != null;
   }
 
-  /// Saves all notes as Markdown files in a ZIP archive. Returns null if
-  /// the save dialog was cancelled.
   Future<int?> exportAllNotes() async {
     final snapshot = notes;
     if (snapshot.isEmpty) return 0;
@@ -170,8 +161,6 @@ class NotesProvider extends ChangeNotifier {
 
   void _persist() {
     notifyListeners();
-    // Wait for the initial load, then snapshot at write time so the file
-    // always reflects the latest state (and includes the loaded notes).
     _writes = _writes
         .then((_) => _loaded)
         .then((_) async {

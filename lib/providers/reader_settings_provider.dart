@@ -21,7 +21,6 @@ class ReaderSettingsProvider extends ChangeNotifier {
 
   ReaderPrefs get prefs => _prefs;
 
-  /// Whether the one-time "swipe to turn chapters" hint was already shown.
   bool get hintSeen => _hintSeen;
 
   void markHintSeen() {
@@ -30,7 +29,6 @@ class ReaderSettingsProvider extends ChangeNotifier {
     _store.writeJson(_hintKey, true);
   }
 
-  /// Applies immediately; persistence is debounced so sliders stay cheap.
   void update(ReaderPrefs next) {
     _prefs = next;
     notifyListeners();
@@ -47,7 +45,6 @@ class ReaderSettingsProvider extends ChangeNotifier {
 
   @override
   void dispose() {
-    // Don't lose a change made in the last 300 ms.
     if (_debounce?.isActive ?? false) {
       _debounce!.cancel();
       _flush();

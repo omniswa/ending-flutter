@@ -44,7 +44,6 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!searching) {
       for (final p in user.recent) {
         final b = lib.byId(p.bookId);
-        // Finished books drop out of "Continue reading".
         if (b != null && p.percent > 0 && !user.isFinished(b.id)) {
           recent.add((b, p));
         }
@@ -53,8 +52,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     final books = lib.filtered;
 
-    // The header sits outside the scroll view so it stays pinned, matching
-    // the Favorites and Notes tabs.
     return SafeArea(
       top: false,
       bottom: false,

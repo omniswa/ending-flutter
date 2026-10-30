@@ -46,7 +46,6 @@ class _ReaderScreenState extends State<ReaderScreen>
   Timer? _hintTimer;
   ReaderPrefs? _lastPrefs;
 
-  /// Minimum horizontal fling speed (logical px/s) that counts as a swipe.
   static const _swipeVelocity = 300.0;
 
   @override
@@ -76,7 +75,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive) {
       _persist();
-      _user.flush(); // don't leave the last position waiting on a timer
+      _user.flush();
     }
   }
 
@@ -97,7 +96,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       });
       _fraction.value = saved?.scroll ?? 0;
       _restoreScroll();
-      _persist(); // marks the book as recently read
+      _persist();
       _maybeShowHint();
     } on Object catch (e, st) {
       debugPrint('Book load failed: $e\n$st');
@@ -105,9 +104,6 @@ class _ReaderScreenState extends State<ReaderScreen>
     }
   }
 
-  /// Jumps to the saved fraction of the chapter. The lazy list only estimates
-  /// its total height until paragraphs are laid out, so jump once, then once
-  /// more on the next frame to correct for the refined estimate.
   void _restoreScroll({int passes = 2}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scroll.hasClients) return;
@@ -174,7 +170,6 @@ class _ReaderScreenState extends State<ReaderScreen>
     _persist();
   }
 
-  /// One-time hint explaining swipe navigation; shown on the first book opened.
   void _maybeShowHint() {
     if (_settings.hintSeen) return;
     _settings.markHintSeen();
@@ -198,7 +193,6 @@ class _ReaderScreenState extends State<ReaderScreen>
     }
   }
 
-  /// Next chapter, or the finish prompt when already on the last one.
   void _next() {
     final chapters = _chapters;
     if (chapters == null) return;
@@ -239,18 +233,17 @@ class _ReaderScreenState extends State<ReaderScreen>
     Navigator.of(context).maybePop();
   }
 
-  /// Deletes the downloaded text (progress and favorites are kept) and leaves
-  /// the reader. The book downloads again the next time it's opened.
   Future<void> _removeDownload() async {
     final ok = await confirmDialog(
       context,
       title: 'Remove download?',
-      message: 'The book is deleted from this device. Your progress is kept '
+      message:
+          'The book is deleted from this device. Your progress is kept '
           'and you can download it again anytime.',
       action: 'Remove',
     );
     if (!ok || !mounted) return;
-    _persist(); // save position before the content goes away
+    _persist();
     await _repo.deleteDownload(widget.book);
     if (mounted) Navigator.of(context).maybePop();
   }
@@ -340,8 +333,6 @@ class _ReaderScreenState extends State<ReaderScreen>
       onHorizontalDragEnd: _onSwipe,
       child: NotificationListener<ScrollNotification>(
         onNotification: _onScroll,
-        // Slivers so only the paragraphs near the viewport are laid out;
-        // the header and footer are single boxes around the lazy list.
         child: CustomScrollView(
           controller: _scroll,
           slivers: [
@@ -354,9 +345,7 @@ class _ReaderScreenState extends State<ReaderScreen>
               ),
               sliver: SliverMainAxisGroup(
                 slivers: [
-                  SliverToBoxAdapter(
-                    child: _chapterHeader(theme, style),
-                  ),
+                  SliverToBoxAdapter(child: _chapterHeader(theme, style)),
                   SliverList.builder(
                     itemCount: paragraphs.length,
                     itemBuilder: (_, i) => Padding(
@@ -383,50 +372,43 @@ class _ReaderScreenState extends State<ReaderScreen>
     );
   }
 
-  /// "CHAPTER n" label, accent rule and optional title above the text.
   Widget _chapterHeader(ReaderTheme theme, TextStyle style) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-      Center(
-        child: Text(
-          'CHAPTER ${_chapter + 1}',
-          style: TextStyle(
-            color: theme.fg.withValues(alpha: 0.55),
-            letterSpacing: 3,
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-      const SizedBox(height: 10),
-      Center(
-        child: Container(
-          width: 32,
-          height: 2,
-          color: AppColors.terracotta,
-        ),
-      ),
-      if (_titles[_chapter] != null) ...[
-        const SizedBox(height: 16),
         Center(
           child: Text(
-            _titles[_chapter]!,
-            textAlign: TextAlign.center,
-            style: style.copyWith(
-              fontSize: style.fontSize! + 4,
-              fontWeight: FontWeight.w700,
+            'CHAPTER ${_chapter + 1}',
+            style: TextStyle(
+              color: theme.fg.withValues(alpha: 0.55),
+              letterSpacing: 3,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),
-      ],
-      const SizedBox(height: 28),
+        const SizedBox(height: 10),
+        Center(
+          child: Container(width: 32, height: 2, color: AppColors.terracotta),
+        ),
+        if (_titles[_chapter] != null) ...[
+          const SizedBox(height: 16),
+          Center(
+            child: Text(
+              _titles[_chapter]!,
+              textAlign: TextAlign.center,
+              style: googleFontStyleWithWeight(
+                style,
+                FontWeight.w700,
+              )!.copyWith(fontSize: style.fontSize! + 4),
+            ),
+          ),
+        ],
+        const SizedBox(height: 28),
       ],
     );
   }
 
-  // Cached per chapter: splitting a long chapter on every rebuild (each
-  // slider tick, each scroll-driven setState) was wasted work.
   List<String>? _paraCache;
   String? _paraSource;
 
@@ -444,8 +426,6 @@ class _ReaderScreenState extends State<ReaderScreen>
     return _paraCache!;
   }
 
-  // GoogleFonts.getFont builds a fresh style each call; reuse it until the
-  // preferences object changes.
   ReaderPrefs? _styleSource;
   TextStyle? _styleCache;
 
@@ -457,8 +437,6 @@ class _ReaderScreenState extends State<ReaderScreen>
     return _styleCache!;
   }
 
-  /// Quiet end-of-chapter cue in place of the old Previous/Next buttons.
-  /// Tapping it works too, for anyone who can't swipe.
   Widget _endFooter(ReaderTheme theme, bool isLast) {
     final color = theme.fg.withValues(alpha: 0.5);
     final label = isLast
@@ -773,7 +751,6 @@ class _ReaderScreenState extends State<ReaderScreen>
           controller: controller,
           itemCount: chapters.length,
           itemBuilder: (_, i) {
-            // One line is all that's shown, so only look at the start.
             final text = chapters[i];
             final head = text.length > 240 ? text.substring(0, 240) : text;
             final preview = head.trim().replaceAll(RegExp(r'\s+'), ' ');

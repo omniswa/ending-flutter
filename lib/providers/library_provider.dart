@@ -30,17 +30,17 @@ class LibraryProvider extends ChangeNotifier {
   bool isCheckingDownload(int id) => _checkingDownloads.contains(id);
   bool isDownloading(int id) => _downloading.contains(id);
 
-  /// Books matching the title/author search. Cached until the query or
-  /// catalog changes, so rebuilds while scrolling stay cheap.
   List<Book> get filtered => _filtered ??= _computeFiltered();
 
   List<Book> _computeFiltered() {
     final q = _query.toLowerCase();
     if (q.isEmpty) return _books;
     return _books
-        .where((b) =>
-            b.title.toLowerCase().contains(q) ||
-            b.author.toLowerCase().contains(q))
+        .where(
+          (b) =>
+              b.title.toLowerCase().contains(q) ||
+              b.author.toLowerCase().contains(q),
+        )
         .toList(growable: false);
   }
 
@@ -58,8 +58,13 @@ class LibraryProvider extends ChangeNotifier {
       _filtered = null;
       _state = LoadState.ready;
       for (final book in list) {
-        refreshDownloadStatus(book).catchError((Object error, StackTrace stack) {
-          debugPrint('Checking offline status for "${book.title}" failed: $error\n$stack');
+        refreshDownloadStatus(book).catchError((
+          Object error,
+          StackTrace stack,
+        ) {
+          debugPrint(
+            'Checking offline status for "${book.title}" failed: $error\n$stack',
+          );
         });
       }
     } on Object catch (e, st) {

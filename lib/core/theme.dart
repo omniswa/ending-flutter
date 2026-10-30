@@ -1,6 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+TextStyle? googleFontStyleWithWeight(TextStyle? style, FontWeight weight) {
+  if (style == null) return null;
+  final fontFamily = style.fontFamilyFallback?.first;
+  if (fontFamily == null) {
+    throw ArgumentError.value(
+      style,
+      'style',
+      'Expected a GoogleFonts style with a font family fallback.',
+    );
+  }
+  return GoogleFonts.getFont(fontFamily, textStyle: style, fontWeight: weight);
+}
+
 abstract final class AppColors {
   static const cream = Color(0xFFFAF8F4); // page background
   static const surface = Color(0xFFFFFFFF); // cards, sheets
@@ -24,17 +37,17 @@ abstract final class AppColors {
 
   /// Soft, layered elevation for cards.
   static List<BoxShadow> get softShadow => [
-        BoxShadow(
-          color: ink.withValues(alpha: 0.06),
-          blurRadius: 20,
-          offset: const Offset(0, 8),
-        ),
-        BoxShadow(
-          color: ink.withValues(alpha: 0.04),
-          blurRadius: 4,
-          offset: const Offset(0, 1),
-        ),
-      ];
+    BoxShadow(
+      color: ink.withValues(alpha: 0.06),
+      blurRadius: 20,
+      offset: const Offset(0, 8),
+    ),
+    BoxShadow(
+      color: ink.withValues(alpha: 0.04),
+      blurRadius: 4,
+      offset: const Offset(0, 1),
+    ),
+  ];
 
   static const noteColors = <Color>[
     Color(0xFFFFF6DC),
@@ -51,25 +64,24 @@ abstract final class AppColors {
 
 abstract final class AppTheme {
   static ThemeData light() {
-    final scheme = ColorScheme.fromSeed(
-      seedColor: AppColors.sage,
-      brightness: Brightness.light,
-    ).copyWith(
-      primary: AppColors.sage,
-      onPrimary: Colors.white,
-      secondary: AppColors.terracotta,
-      surface: AppColors.surface,
-      onSurface: AppColors.ink,
-      outlineVariant: AppColors.line,
-    );
+    final scheme =
+        ColorScheme.fromSeed(
+          seedColor: AppColors.sage,
+          brightness: Brightness.light,
+        ).copyWith(
+          primary: AppColors.sage,
+          onPrimary: Colors.white,
+          secondary: AppColors.terracotta,
+          surface: AppColors.surface,
+          onSurface: AppColors.ink,
+          outlineVariant: AppColors.line,
+        );
     final base = ThemeData(useMaterial3: true, colorScheme: scheme);
 
     // Inter for UI text; a serif for large titles gives the app a bookish
     // voice without decorating anything.
-    final ui = GoogleFonts.interTextTheme(base.textTheme).apply(
-      bodyColor: AppColors.ink,
-      displayColor: AppColors.ink,
-    );
+    final ui = GoogleFonts.interTextTheme(base.textTheme)
+        .apply(bodyColor: AppColors.ink, displayColor: AppColors.ink);
     TextStyle? serif(TextStyle? s) => s == null
         ? null
         : GoogleFonts.fraunces(
@@ -94,7 +106,10 @@ abstract final class AppTheme {
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
-        titleTextStyle: text.titleLarge?.copyWith(fontWeight: FontWeight.w600),
+        titleTextStyle: googleFontStyleWithWeight(
+          text.titleLarge,
+          FontWeight.w600,
+        ),
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: AppColors.surface,
@@ -106,10 +121,10 @@ abstract final class AppTheme {
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
-          return text.labelMedium!.copyWith(
-            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-            color: selected ? AppColors.sage : AppColors.muted,
-          );
+          return googleFontStyleWithWeight(
+            text.labelMedium,
+            selected ? FontWeight.w600 : FontWeight.w500,
+          )!.copyWith(color: selected ? AppColors.sage : AppColors.muted);
         }),
         iconTheme: WidgetStateProperty.resolveWith(
           (states) => IconThemeData(
@@ -153,14 +168,20 @@ abstract final class AppTheme {
           foregroundColor: Colors.white,
           minimumSize: const Size(0, 48),
           shape: const StadiumBorder(),
-          textStyle: text.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+          textStyle: googleFontStyleWithWeight(
+            text.labelLarge,
+            FontWeight.w600,
+          ),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           minimumSize: const Size(0, 48),
           shape: const StadiumBorder(),
-          textStyle: text.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+          textStyle: googleFontStyleWithWeight(
+            text.labelLarge,
+            FontWeight.w600,
+          ),
         ),
       ),
       textButtonTheme: TextButtonThemeData(

@@ -15,7 +15,7 @@ import 'local_store.dart';
 class BookContent {
   const BookContent(this.chapters, this.titles);
   final List<String> chapters;
-  final List<String?> titles; // same length as chapters; null = no title
+  final List<String?> titles;
 }
 
 class BookRepository {
@@ -23,6 +23,8 @@ class BookRepository {
     : _client = client ?? http.Client();
 
   static const _cacheKey = 'books_index_cache';
+  static const _epubExtractionVersion = '2';
+  static const _epubExtractionVersionFile = '.epub-extraction-version';
   final LocalStore _store;
   final http.Client _client;
 
@@ -30,7 +32,6 @@ class BookRepository {
 
   Uri _resolve(String path) => Uri.parse(AppConfig.baseUrl).resolve(path);
 
-  /// Fetches the catalog; falls back to the last cached copy when offline.
   Future<List<Book>> fetchBooks() async {
     try {
       final res = await _client
@@ -69,17 +70,10 @@ class BookRepository {
 
   final Map<int, Future<BookContent>> _inFlight = {};
 
-  /// Returns chapter texts + titles in order, downloading on first use.
-  ///
-  /// Concurrent calls for the same book share a single download. [refresh]
-  /// forces a re-download; if that fails and a local copy exists, the local
-  /// copy is used instead of surfacing an error.
   Future<BookContent> loadContent(Book book, {bool refresh = false}) {
     final running = _inFlight[book.id];
     if (running != null) return running;
     final future = _loadContent(book, refresh: refresh).whenComplete(() {
-      // Block body on purpose: returning remove()'s value (this same future)
-      // would make whenComplete wait on itself.
       _inFlight.remove(book.id);
     });
     return _inFlight[book.id] = future;
@@ -88,7 +82,6 @@ class BookRepository {
   Future<bool> isDownloaded(Book book) async =>
       _hasContent(await _bookDir(book));
 
-  /// Deletes the downloaded copy (reading progress is kept).
   Future<void> deleteDownload(Book book) async {
     await _inFlight[book.id]?.catchError((_) => const BookContent([], []));
     final dir = await _bookDir(book);
@@ -99,9 +92,17 @@ class BookRepository {
     final dir = await _bookDir(book);
     final hasLocal = _hasContent(dir);
     final source = _readSource(dir);
-    // A changed source URL in the catalog means the book was republished.
+    final epubExtractionVersionFile = File(
+      p.join(dir.path, _epubExtractionVersionFile),
+    );
+    final epubExtractionVersion = epubExtractionVersionFile.existsSync()
+        ? epubExtractionVersionFile.readAsStringSync().trim()
+        : null;
     final needsDownload =
-        !hasLocal || refresh || (source != null && source != book.file);
+        !hasLocal ||
+        refresh ||
+        (source != null && source != book.file) ||
+        (book.isEpub && epubExtractionVersion != _epubExtractionVersion);
     if (needsDownload) {
       try {
         await _download(book, dir);
@@ -135,7 +136,6 @@ class BookRepository {
     final chapters = <String>[];
     final titles = <String?>[];
 
-    // 1) Prefer manifest.json (order + titles).
     for (final e in _readManifest(dir) ?? const []) {
       final f = File(p.join(dir.path, e.file));
       if (!f.existsSync()) continue;
@@ -143,7 +143,6 @@ class BookRepository {
       titles.add(e.title == null || e.title!.isEmpty ? null : e.title);
     }
 
-    // 2) Fallback: numbered files (1.txt, 2.txt, ...).
     if (chapters.isEmpty) {
       for (final f in _chapterFiles(dir)) {
         chapters.add(await f.readAsString());
@@ -165,13 +164,13 @@ class BookRepository {
       final list = (json['chapters'] as List).map((e) {
         final m = e as Map<String, dynamic>;
         return (
-          file: p.basename(m['file'] as String), // basename blocks "../" tricks
+          file: p.basename(m['file'] as String),
           title: (m['title'] as String?)?.trim(),
         );
       }).toList();
       return list.isEmpty ? null : list;
     } on Object {
-      return null; // malformed manifest: fall back to numbered files
+      return null;
     }
   }
 
@@ -195,8 +194,6 @@ class BookRepository {
       throw HttpException('Download failed (${res.statusCode})');
     }
     final chapters = await compute(_extractBook, (res.bodyBytes, book.isEpub));
-    // Write into a sibling temp dir and rename, so a crash or kill mid-write
-    // can never leave a truncated book that looks complete on the next open.
     final tmp = Directory('${dir.path}.tmp');
     if (tmp.existsSync()) await tmp.delete(recursive: true);
     await tmp.create(recursive: true);
@@ -204,9 +201,12 @@ class BookRepository {
       for (final e in chapters.entries) {
         await File(p.join(tmp.path, e.key)).writeAsString(e.value, flush: true);
       }
-      // Remember which source this copy came from, to detect republished books.
       await File(p.join(tmp.path, _sourceFile))
           .writeAsString(book.file, flush: true);
+      if (book.isEpub) {
+        await File(p.join(tmp.path, _epubExtractionVersionFile))
+            .writeAsString(_epubExtractionVersion, flush: true);
+      }
       if (dir.existsSync()) await dir.delete(recursive: true);
       await tmp.rename(dir.path);
     } on Object {
@@ -216,7 +216,6 @@ class BookRepository {
   }
 }
 
-/// Runs in a background isolate.
 Map<String, String> _extractBook((Uint8List, bool) input) {
   final (bytes, isEpub) = input;
   final archive = ZipDecoder().decodeBytes(bytes);
@@ -226,8 +225,6 @@ Map<String, String> _extractBook((Uint8List, bool) input) {
   for (final f in archive.files) {
     if (!f.isFile) continue;
     final name = p.basename(f.name);
-    // Keep the manifest and any .txt chapter (manifest entries may use
-    // names other than 1.txt, 2.txt...). Skip hidden/junk files.
     final keep =
         name == 'manifest.json' ||
         (name.endsWith('.txt') && !name.startsWith('.'));
@@ -253,6 +250,7 @@ Map<String, String> _extractEpub(Archive archive) {
   }
   final containerXml = XmlDocument.parse(
     utf8.decode(container, allowMalformed: true),
+    entityMapping: const XmlDefaultEntityMapping.html5(),
   );
   final rootfiles = containerXml.findAllElements('rootfile', namespaceUri: '*');
   final rootfile = rootfiles.isEmpty ? null : rootfiles.first;
@@ -271,6 +269,7 @@ Map<String, String> _extractEpub(Archive archive) {
   }
   final packageXml = XmlDocument.parse(
     utf8.decode(packageBytes, allowMalformed: true),
+    entityMapping: const XmlDefaultEntityMapping.html5(),
   );
   final manifest = <String, ({String href, String mediaType})>{};
   for (final item in packageXml.findAllElements('item', namespaceUri: '*')) {
@@ -284,12 +283,47 @@ Map<String, String> _extractEpub(Archive archive) {
   }
 
   final basePath = p.posix.dirname(packagePath);
+  const frontMatterTypes = {
+    'cover',
+    'title-page',
+    'copyright-page',
+    'toc',
+    'dedication',
+    'acknowledgments',
+    'acknowledgements',
+    'foreword',
+    'preface',
+  };
+  final frontMatterPaths = <String>{};
+  final frontMatterReferences = [
+    ...packageXml.findAllElements('reference', namespaceUri: '*'),
+    ...packageXml.findAllElements('a', namespaceUri: '*'),
+  ];
+  for (final reference in frontMatterReferences) {
+    final types = [
+      reference.getAttribute('type') ?? '',
+      reference.getAttribute(
+            'type',
+            namespaceUri: 'http://www.idpf.org/2007/ops',
+          ) ??
+          '',
+    ].join(' ').toLowerCase().split(RegExp(r'\s+'));
+    final href = reference.getAttribute('href');
+    if (href == null || !types.any(frontMatterTypes.contains)) continue;
+    final path = _normalizeEpubPath(
+      p.posix.join(basePath, Uri.parse(href).path),
+    );
+    if (path != null) frontMatterPaths.add(path);
+  }
+
   final chapterTexts = <String>[];
   final titles = <String?>[];
+  var startedMainContent = false;
   for (final itemRef in packageXml.findAllElements(
     'itemref',
     namespaceUri: '*',
   )) {
+    if (itemRef.getAttribute('linear')?.toLowerCase() == 'no') continue;
     final id = itemRef.getAttribute('idref');
     final item = id == null ? null : manifest[id];
     if (item == null ||
@@ -301,11 +335,13 @@ Map<String, String> _extractEpub(Archive archive) {
     final path = _normalizeEpubPath(
       p.posix.join(basePath, Uri.parse(item.href).path),
     );
-    final chapter = path == null ? null : files[path];
+    if (path == null) continue;
+    final chapter = files[path];
     if (chapter == null) continue;
 
     final document = XmlDocument.parse(
       utf8.decode(chapter, allowMalformed: true),
+      entityMapping: const XmlDefaultEntityMapping.html5(),
     );
     final bodies = document.findAllElements('body', namespaceUri: '*');
     final body = bodies.isEmpty ? document.rootElement : bodies.first;
@@ -316,6 +352,16 @@ Map<String, String> _extractEpub(Archive archive) {
         .where((element) => RegExp(r'^h[1-6]$').hasMatch(element.name.local))
         .map((element) => _epubText(element))
         .firstWhere((value) => value.isNotEmpty, orElse: () => '');
+    final documentTitle = document
+        .findAllElements('title', namespaceUri: '*')
+        .map((element) => _epubText(element))
+        .firstWhere((value) => value.isNotEmpty, orElse: () => '');
+    final isFrontMatter =
+        frontMatterPaths.contains(path) ||
+        (!startedMainContent &&
+            _isEpubFrontMatter(path, heading, documentTitle, text));
+    if (isFrontMatter) continue;
+    startedMainContent = true;
     chapterTexts.add(text);
     titles.add(heading.isEmpty ? null : heading);
   }
@@ -332,6 +378,32 @@ Map<String, String> _extractEpub(Archive archive) {
   }
   out['manifest.json'] = jsonEncode({'chapters': entries});
   return out;
+}
+
+bool _isEpubFrontMatter(
+  String path,
+  String heading,
+  String documentTitle,
+  String text,
+) {
+  final normalizedPath = path.toLowerCase();
+  final filenameIndicatesFrontMatter = RegExp(
+    r'(^|[/_.\-\s])(cover|coverpage|title|title[-_ ]?page|copyright(?:[-_ ]?page)?|colophon|dedication|frontispiece|contents|table[-_ ]of[-_ ]contents|toc)([/_.\-\s]|$)',
+  ).hasMatch(normalizedPath);
+  if (filenameIndicatesFrontMatter) return true;
+
+  bool isFrontMatterTitle(String title) => RegExp(
+    r'^(cover(?: page)?|title(?: page)?|copyright(?: page)?|colophon|dedication|frontispiece|contents|table of contents|acknowledg(?:e)?ments)$',
+    caseSensitive: false,
+  ).hasMatch(title.trim());
+  if (isFrontMatterTitle(heading) || isFrontMatterTitle(documentTitle)) {
+    return true;
+  }
+
+  return RegExp(
+    r'\b(copyright|all rights reserved|isbn|cataloging-in-publication)\b',
+    caseSensitive: false,
+  ).hasMatch(text.length > 1200 ? text.substring(0, 1200) : text);
 }
 
 String? _normalizeEpubPath(String path) {

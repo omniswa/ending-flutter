@@ -23,7 +23,7 @@ class _ReaderSettingsSheet extends StatelessWidget {
 
     Widget label(String s) => Padding(
           padding: const EdgeInsets.only(top: 18, bottom: 8),
-          child: Text(s.toUpperCase(), style: t.labelSmall?.copyWith(letterSpacing: 1.4, color: AppColors.muted, fontWeight: FontWeight.w700)),
+          child: Text(s.toUpperCase(), style: googleFontStyleWithWeight(t.labelSmall, FontWeight.w700)?.copyWith(letterSpacing: 1.4, color: AppColors.muted)),
         );
 
     return SafeArea(
@@ -33,7 +33,7 @@ class _ReaderSettingsSheet extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
-              Text('Reading settings', style: t.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+              Text('Reading settings', style: googleFontStyleWithWeight(t.titleLarge, FontWeight.w700)),
               const Spacer(),
               TextButton(onPressed: provider.reset, child: const Text('Reset')),
             ]),
@@ -160,9 +160,9 @@ class _SliderRow extends StatelessWidget {
           child: Row(children: [
             Icon(icon, size: 18, color: AppColors.muted),
             const SizedBox(width: 8),
-            Text(title, style: t.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+            Text(title, style: googleFontStyleWithWeight(t.titleSmall, FontWeight.w600)),
             const Spacer(),
-            Text(display, style: t.labelLarge?.copyWith(color: AppColors.terracotta, fontWeight: FontWeight.w700)),
+            Text(display, style: googleFontStyleWithWeight(t.labelLarge, FontWeight.w700)?.copyWith(color: AppColors.terracotta)),
           ]),
         ),
         Slider(value: value.clamp(min, max), min: min, max: max, onChanged: onChanged),

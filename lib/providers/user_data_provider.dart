@@ -6,11 +6,6 @@ import '../models/favorite_entry.dart';
 import '../models/reading_progress.dart';
 import '../services/local_store.dart';
 
-/// Favorites, finished books and reading progress.
-/// Synchronous reads, persisted on every change.
-///
-/// "Finished" is tracked separately from favorites, so any book can be marked
-/// finished whether or not it has been favorited.
 class UserDataProvider extends ChangeNotifier {
   UserDataProvider(this._store) {
     _restore();
@@ -34,12 +29,11 @@ class UserDataProvider extends ChangeNotifier {
           final map = e as Map<String, dynamic>;
           final x = FavoriteEntry.fromJson(map);
           _favs[x.bookId] = x;
-          // Migrate the legacy per-favorite "finished" flag.
           if (map['finished'] == true && _finished.add(x.bookId)) {
             migrated = true;
           }
         } on Object {
-          continue; // skip a corrupted record
+          continue;
         }
       }
     }
@@ -65,9 +59,9 @@ class UserDataProvider extends ChangeNotifier {
 
   List<FavoriteEntry> get favorites => List.unmodifiable(_favs.values);
 
-  /// Most recently opened first.
   List<ReadingProgress> get recent =>
-      _progress.values.toList()..sort((a, b) => b.lastOpened.compareTo(a.lastOpened));
+      _progress.values.toList()
+        ..sort((a, b) => b.lastOpened.compareTo(a.lastOpened));
 
   bool isFavorite(int id) => _favs.containsKey(id);
   bool isFinished(int id) => _finished.contains(id);
@@ -81,7 +75,6 @@ class UserDataProvider extends ChangeNotifier {
     _saveFavs();
   }
 
-  /// Works for any book, favorite or not.
   void setFinished(int id, {required bool finished}) {
     final changed = finished ? _finished.add(id) : _finished.remove(id);
     if (changed) _saveFinished();
@@ -98,16 +91,12 @@ class UserDataProvider extends ChangeNotifier {
     _saveFavs();
   }
 
-  /// Records reading progress. The in-memory value is always current, but
-  /// listeners are only notified when something a list screen shows has
-  /// changed (chapter, whole-percent or time left), and the disk write is
-  /// coalesced, so scrolling doesn't rebuild the library grids or rewrite
-  /// every book's progress on each save.
   void saveProgress(ReadingProgress p) {
     final old = _progress[p.bookId];
     _progress[p.bookId] = p;
     _scheduleProgressWrite();
-    final visibleChange = old == null ||
+    final visibleChange =
+        old == null ||
         old.chapter != p.chapter ||
         (old.percent * 100).round() != (p.percent * 100).round() ||
         old.minutesLeft != p.minutesLeft;
@@ -120,7 +109,6 @@ class UserDataProvider extends ChangeNotifier {
     _progressTimer ??= Timer(const Duration(milliseconds: 500), flush);
   }
 
-  /// Writes pending progress to disk now (app pause, reader closed).
   void flush() {
     if (_progressTimer == null) return;
     _progressTimer!.cancel();

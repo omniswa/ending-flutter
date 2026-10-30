@@ -32,7 +32,6 @@ class Book {
       added:
           parseLongDate(json['added'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
-      // Catalog paths may be relative to the books.json location.
       cover: AppConfig.resolve(json['cover'] as String),
       file: resolvedFile,
       isEpub:
@@ -49,7 +48,6 @@ class Book {
   final String file;
   final bool isEpub;
 
-  /// Newest first; higher id wins when dates are equal.
   static int compareNewestFirst(Book a, Book b) {
     final byDate = b.added.compareTo(a.added);
     return byDate != 0 ? byDate : b.id.compareTo(a.id);

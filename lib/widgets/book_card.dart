@@ -7,12 +7,6 @@ import '../models/book.dart';
 import '../models/reading_progress.dart';
 import 'common.dart';
 
-/// Compact, full-bleed grid tile used on Home and Favorites.
-///
-/// The cover fills the whole tile. Everything else is layered on top of it:
-/// a "New" badge (top-left), [trailing] (top-right: favorite heart, overflow
-/// menu, ...) and, over a dark scrim at the bottom, the title, author and a
-/// one-line status/progress footer.
 class BookCard extends StatelessWidget {
   const BookCard({
     super.key,
@@ -29,8 +23,6 @@ class BookCard extends StatelessWidget {
   final bool finished;
   final Widget? trailing;
 
-  /// Shared grid layout so Home, Favorites and the skeleton line up.
-  /// Two columns keep cover details and controls legible on phones.
   static const gridDelegate = SliverGridDelegateWithFixedCrossAxisCount(
     crossAxisCount: 2,
     childAspectRatio: 0.62,
@@ -64,7 +56,6 @@ class BookCard extends StatelessWidget {
               height: c.maxHeight,
               radius: 0,
             ),
-            // Scrim keeps the text readable on any cover.
             Positioned(
               left: 0,
               right: 0,
@@ -136,10 +127,10 @@ class BookCard extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             'Finished',
-            style: small?.copyWith(
-              color: _onCover,
-              fontWeight: FontWeight.w700,
-            ),
+            style: googleFontStyleWithWeight(
+              small,
+              FontWeight.w700,
+            )?.copyWith(color: _onCover),
           ),
         ],
       );
@@ -160,10 +151,10 @@ class BookCard extends StatelessWidget {
               children: [
                 TextSpan(
                   text: formatPercent(p.percent),
-                  style: const TextStyle(
-                    color: Color(0xFFF0C9A8),
-                    fontWeight: FontWeight.w800,
-                  ),
+                  style: googleFontStyleWithWeight(
+                    small,
+                    FontWeight.w800,
+                  )?.copyWith(color: Color(0xFFF0C9A8)),
                 ),
                 TextSpan(
                   text: ' · ${formatTimeLeft(p.minutesLeft)}',
@@ -212,11 +203,10 @@ class _Badge extends StatelessWidget {
     ),
     child: Text(
       label,
-      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-        color: Colors.white,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 0.2,
-      ),
+      style: googleFontStyleWithWeight(
+        Theme.of(context).textTheme.labelSmall,
+        FontWeight.w700,
+      )?.copyWith(color: Colors.white, letterSpacing: 0.2),
     ),
   );
 }

@@ -19,8 +19,6 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   GoogleFonts.config.allowRuntimeFetching = !AppConfig.bundledFonts;
 
-  // Last-resort logging so a failed async write or stray exception is
-  // visible instead of vanishing. Hook a crash reporter in here later.
   FlutterError.onError = (details) {
     FlutterError.presentError(details);
     debugPrint('Flutter error: ${details.exceptionAsString()}');
@@ -39,7 +37,9 @@ Future<void> main() async {
           create: (_) => BookRepository(store),
           dispose: (_, repo) => repo.dispose(),
         ),
-        ChangeNotifierProvider(create: (c) => LibraryProvider(c.read<BookRepository>())),
+        ChangeNotifierProvider(
+          create: (c) => LibraryProvider(c.read<BookRepository>()),
+        ),
         ChangeNotifierProvider(create: (_) => UserDataProvider(store)),
         ChangeNotifierProvider(create: (_) => ReaderSettingsProvider(store)),
         ChangeNotifierProvider(create: (_) => NotesProvider(store)),
@@ -54,9 +54,9 @@ class NdingApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-        title: AppConfig.appName,
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light(),
-        home: const MainShell(),
-      );
+    title: AppConfig.appName,
+    debugShowCheckedModeBanner: false,
+    theme: AppTheme.light(),
+    home: const MainShell(),
+  );
 }
