@@ -28,10 +28,14 @@ class NotesProvider extends ChangeNotifier {
   bool _loading = true;
 
   bool _readFailed = false;
+  bool _hasPendingWrites = false;
+  String? _errorMessage;
   late final Future<void> _loaded;
   Future<void> _writes = Future.value();
 
   bool get loading => _loading;
+  String? get errorMessage => _errorMessage;
+  String get retryLabel => _readFailed ? 'Retry loading' : 'Retry save';
   Note? byId(String id) => _notes[id];
 
   List<Note> get notes =>
@@ -40,25 +44,62 @@ class NotesProvider extends ChangeNotifier {
 
   Future<void> _load() async {
     try {
-      final data = await _store.readFile(_file);
-      if (data is List) {
-        var skipped = 0;
-        for (final e in data) {
-          try {
-            final n = Note.fromJson(e as Map<String, dynamic>);
-            _notes.putIfAbsent(n.id, () => n);
-          } on Object {
-            skipped++;
-          }
-        }
-        if (skipped > 0) await _store.backupFile(_file);
-      }
+      _notes.addAll(await _readNotes());
     } on Object catch (e) {
-      _readFailed = true;
-      debugPrint('Loading notes failed: $e');
+      _setLoadError(e);
     }
     _loading = false;
     notifyListeners();
+  }
+
+  Future<Map<String, Note>> _readNotes() async {
+    final data = await _store.readFile(_file);
+    final loaded = <String, Note>{};
+    if (data is List) {
+      var skipped = 0;
+      for (final e in data) {
+        try {
+          final note = Note.fromJson(e as Map<String, dynamic>);
+          loaded.putIfAbsent(note.id, () => note);
+        } on Object {
+          skipped++;
+        }
+      }
+      if (skipped > 0) await _store.backupFile(_file);
+    }
+    return loaded;
+  }
+
+  void _setLoadError(Object error) {
+    _readFailed = true;
+    _errorMessage = 'Couldn\'t load your notes. Your existing file is preserved; retry loading before saving.';
+    debugPrint('Loading notes failed: $error');
+  }
+
+  Future<void> retry() async {
+    if (!_readFailed) {
+      await _persist();
+      return;
+    }
+
+    _loading = true;
+    notifyListeners();
+    try {
+      final loaded = await _readNotes();
+      loaded.addAll(_notes);
+      _notes
+        ..clear()
+        ..addAll(loaded);
+      _readFailed = false;
+      _errorMessage = null;
+      _loading = false;
+      notifyListeners();
+      if (_hasPendingWrites) await _persist();
+    } on Object catch (e) {
+      _setLoadError(e);
+      _loading = false;
+      notifyListeners();
+    }
   }
 
   void save(Note note) {
@@ -159,15 +200,23 @@ class NotesProvider extends ChangeNotifier {
     return saved == null ? null : snapshot.length;
   }
 
-  void _persist() {
+  Future<void> _persist() {
+    _hasPendingWrites = true;
     notifyListeners();
-    _writes = _writes
-        .then((_) => _loaded)
-        .then((_) async {
-          if (_readFailed) return;
-          final snapshot = _notes.values.map((n) => n.toJson()).toList();
-          await _store.writeFile(_file, snapshot);
-        })
-        .catchError((Object e) => debugPrint('Saving notes failed: $e'));
+    _writes = _writes.then((_) async {
+      await _loaded;
+      if (_readFailed) return;
+      try {
+        final snapshot = _notes.values.map((n) => n.toJson()).toList();
+        await _store.writeFile(_file, snapshot);
+        _hasPendingWrites = false;
+        _errorMessage = null;
+      } on Object catch (e) {
+        _errorMessage = 'Couldn\'t save your notes. Your edits are still available; retry to save them.';
+        debugPrint('Saving notes failed: $e');
+      }
+      notifyListeners();
+    });
+    return _writes;
   }
 }

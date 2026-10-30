@@ -9,6 +9,8 @@ class ReadingProgress {
     required this.percent,
     required this.minutesLeft,
     required this.lastOpened,
+    this.paragraph,
+    this.paragraphOffset,
   });
 
   factory ReadingProgress.fromJson(Map<String, dynamic> j) => ReadingProgress(
@@ -18,6 +20,8 @@ class ReadingProgress {
     percent: (j['percent'] as num).toDouble(),
     minutesLeft: j['minutesLeft'] as int,
     lastOpened: DateTime.parse(j['lastOpened'] as String),
+    paragraph: j['paragraph'] as int?,
+    paragraphOffset: (j['paragraphOffset'] as num?)?.toDouble(),
   );
 
   final int bookId;
@@ -28,6 +32,8 @@ class ReadingProgress {
   final double percent;
   final int minutesLeft;
   final DateTime lastOpened;
+  final int? paragraph;
+  final double? paragraphOffset;
 
   Map<String, dynamic> toJson() => {
     'bookId': bookId,
@@ -36,5 +42,7 @@ class ReadingProgress {
     'percent': percent,
     'minutesLeft': minutesLeft,
     'lastOpened': lastOpened.toIso8601String(),
+    'paragraph': paragraph,
+    'paragraphOffset': paragraphOffset,
   };
 }

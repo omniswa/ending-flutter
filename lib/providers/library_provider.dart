@@ -9,7 +9,7 @@ enum LoadState { loading, ready, error }
 
 class LibraryProvider extends ChangeNotifier {
   LibraryProvider(this._repo) {
-    load();
+    unawaited(load());
   }
 
   final BookRepository _repo;
@@ -46,26 +46,29 @@ class LibraryProvider extends ChangeNotifier {
         .toList(growable: false);
   }
 
-  Future<void> load() async {
+  Future<bool> load() async {
     _error = null;
     if (_books.isEmpty) {
       _state = LoadState.loading;
       notifyListeners();
     }
+    var succeeded = false;
     try {
-      final list = await _repo.fetchBooks()
-        ..sort(Book.compareNewestFirst);
+      final catalog = await _repo.fetchBooks();
+      final list = catalog.books..sort(Book.compareNewestFirst);
       _books = list;
       _index = {for (final b in list) b.id: b};
       _filtered = null;
       _state = LoadState.ready;
       unawaited(_refreshAllDownloadStatuses(list));
+      succeeded = !catalog.refreshFailed;
     } on Object catch (e, st) {
       _error = e;
       debugPrint('Library load failed: $e\n$st');
       if (_books.isEmpty) _state = LoadState.error;
     }
     notifyListeners();
+    return succeeded;
   }
 
   Future<void> _refreshAllDownloadStatuses(List<Book> list) async {
@@ -128,7 +131,7 @@ class LibraryProvider extends ChangeNotifier {
     _downloading.add(book.id);
     notifyListeners();
     try {
-      await _repo.loadContent(book);
+      await _repo.downloadBook(book);
       _downloaded.add(book.id);
     } finally {
       _downloading.remove(book.id);

@@ -8,6 +8,7 @@ import '../models/note.dart';
 import '../providers/notes_provider.dart';
 import '../widgets/common.dart';
 import '../widgets/note_export.dart';
+import '../widgets/notes_error_banner.dart';
 import 'note_editor_screen.dart';
 
 class NotesScreen extends StatelessWidget {
@@ -96,6 +97,7 @@ class NotesScreen extends StatelessWidget {
                 ],
               ),
             ),
+            const NotesErrorBanner(),
             Expanded(
               child: provider.loading
                   ? const Center(
@@ -152,6 +154,10 @@ class _NoteCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
+    final bodyPreview = note.body.trim();
+    final preview = bodyPreview.length > 300
+        ? '${bodyPreview.substring(0, 300)}…'
+        : bodyPreview;
     final color = AppColors
         .noteColors[note.colorIndex.clamp(0, AppColors.noteColors.length - 1)];
     return SoftCard(
@@ -238,8 +244,9 @@ class _NoteCard extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.only(right: 10),
               child: Text(
-                note.body.trim(),
-                overflow: TextOverflow.fade,
+                preview,
+                maxLines: 5,
+                overflow: TextOverflow.ellipsis,
                 style: t.bodySmall?.copyWith(
                   color: AppColors.ink.withValues(alpha: 0.7),
                   height: 1.45,

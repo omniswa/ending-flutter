@@ -42,7 +42,9 @@ class LocalStore {
       return jsonDecode(raw);
     } on FormatException {
       await _moveAside(f);
-      return null;
+      throw FormatException(
+        'The "$name" file contained invalid JSON and was moved aside.',
+      );
     }
   }
 

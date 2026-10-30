@@ -34,6 +34,17 @@ class _HomeScreenState extends State<HomeScreen> {
     lib.setQuery('');
   }
 
+  Future<void> _refreshLibrary(LibraryProvider library) async {
+    final succeeded = await library.load();
+    if (!succeeded && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not refresh the library. Please try again.'),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final lib = context.watch<LibraryProvider>();
@@ -62,7 +73,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Expanded(
             child: RefreshIndicator(
               color: AppColors.sage,
-              onRefresh: lib.load,
+              onRefresh: () => _refreshLibrary(lib),
               child: CustomScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 keyboardDismissBehavior:
@@ -79,8 +90,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           scrollDirection: Axis.horizontal,
                           padding: const EdgeInsets.symmetric(horizontal: 20),
                           itemCount: recent.length,
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(width: 14),
+                          separatorBuilder: (_, _) => const SizedBox(width: 14),
                           itemBuilder: (_, i) => RecentCard(
                             book: recent[i].$1,
                             progress: recent[i].$2,
@@ -154,7 +164,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             suffixIcon: ValueListenableBuilder<TextEditingValue>(
               valueListenable: _search,
-              builder: (_, v, __) => v.text.isEmpty
+              builder: (_, v, _) => v.text.isEmpty
                   ? const SizedBox.shrink()
                   : IconButton(
                       tooltip: 'Clear',

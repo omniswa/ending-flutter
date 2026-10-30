@@ -39,8 +39,8 @@ class BookCover extends StatelessWidget {
           fit: BoxFit.cover,
           memCacheWidth: (width * 3).round(),
           fadeInDuration: const Duration(milliseconds: 180),
-          placeholder: (_, __) => const ColoredBox(color: AppColors.chip),
-          errorWidget: (_, __, ___) => const ColoredBox(
+          placeholder: (_, _) => const ColoredBox(color: AppColors.chip),
+          errorWidget: (_, _, _) => const ColoredBox(
             color: AppColors.chip,
             child: Icon(Icons.menu_book_rounded, color: AppColors.muted),
           ),
@@ -118,7 +118,7 @@ class SectionTitle extends StatelessWidget {
           ),
         ),
         const Spacer(),
-        if (trailing != null) trailing!,
+        ?trailing,
       ],
     ),
   );
@@ -302,7 +302,7 @@ class ScreenHeader extends StatelessWidget {
                           ],
                         ),
                       ),
-                      if (trailing != null) trailing!,
+                      ?trailing,
                     ],
                   ),
                   if (bottom != null) ...[const SizedBox(height: 18), bottom!],

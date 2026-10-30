@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
@@ -35,9 +35,12 @@ class _ReaderScreenState extends State<ReaderScreen>
   late final ReaderSettingsProvider _settings;
   final _scroll = ScrollController();
   final _fraction = ValueNotifier<double>(0);
+  final Map<int, BuildContext> _paragraphContexts = {};
 
   List<String>? _chapters;
   List<String?> _titles = const [];
+  List<int> _paragraphOffsets = const [];
+  ({int paragraph, double offset})? _location;
   Object? _error;
   int _chapter = 0;
   bool _chrome = true;
@@ -45,6 +48,9 @@ class _ReaderScreenState extends State<ReaderScreen>
   Timer? _saveTimer;
   Timer? _hintTimer;
   ReaderPrefs? _lastPrefs;
+  bool _restoring = false;
+  int _relayoutGeneration = 0;
+  int _restoreGeneration = 0;
 
   static const _swipeVelocity = 300.0;
 
@@ -81,6 +87,10 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   Future<void> _load({bool refresh = false}) async {
     if (refresh) _persist();
+    _restoreGeneration++;
+    _relayoutGeneration++;
+    _restoring = false;
+    _paragraphContexts.clear();
     setState(() {
       _error = null;
       _chapters = null;
@@ -89,14 +99,28 @@ class _ReaderScreenState extends State<ReaderScreen>
       final content = await _repo.loadContent(widget.book, refresh: refresh);
       final chapters = content.chapters;
       if (!mounted) return;
+      if (content.refreshFailed) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Could not re-download "${widget.book.title}". Using saved copy.',
+            ),
+          ),
+        );
+      }
       final saved = _user.progressFor(widget.book.id);
+      final chapter = (saved?.chapter ?? 0)
+          .clamp(0, chapters.length - 1)
+          .toInt();
       setState(() {
         _chapters = chapters;
         _titles = content.titles;
-        _chapter = (saved?.chapter ?? 0).clamp(0, chapters.length - 1).toInt();
+        _chapter = chapter;
       });
-      _fraction.value = saved?.scroll ?? 0;
-      _restoreScroll();
+      final paragraphs = _paragraphsFor(chapters[chapter]);
+      _location = _savedLocation(saved, paragraphs);
+      _fraction.value = _chapterFraction(_location, paragraphs);
+      _restoreLocation(_location);
       _persist();
       _maybeShowHint();
     } on Object catch (e, st) {
@@ -105,24 +129,283 @@ class _ReaderScreenState extends State<ReaderScreen>
     }
   }
 
-  void _restoreScroll({int passes = 2}) {
+  ({int paragraph, double offset})? _savedLocation(
+    ReadingProgress? saved,
+    List<String> paragraphs,
+  ) {
+    if (paragraphs.isEmpty) return null;
+    final paragraph = saved?.paragraph;
+    final offset = saved?.paragraphOffset;
+    if (paragraph != null && offset != null) {
+      return (
+        paragraph: paragraph.clamp(0, paragraphs.length - 1).toInt(),
+        offset: offset.clamp(0.0, 1.0).toDouble(),
+      );
+    }
+
+    final target =
+        (saved?.scroll ?? 0).clamp(0.0, 1.0) *
+        paragraphs.fold<int>(0, (total, text) => total + text.length);
+    var before = 0;
+    for (var i = 0; i < paragraphs.length; i++) {
+      final end = before + paragraphs[i].length;
+      if (target <= end || i == paragraphs.length - 1) {
+        return (
+          paragraph: i,
+          offset: paragraphs[i].isEmpty
+              ? 0
+              : ((target - before) / paragraphs[i].length)
+                    .clamp(0.0, 1.0)
+                    .toDouble(),
+        );
+      }
+      before = end;
+    }
+    return (paragraph: 0, offset: 0);
+  }
+
+  double _chapterFraction(
+    ({int paragraph, double offset})? location,
+    List<String> paragraphs,
+  ) {
+    if (location == null ||
+        paragraphs.isEmpty ||
+        location.paragraph < 0 ||
+        location.paragraph >= paragraphs.length) {
+      return 0;
+    }
+    final before = _paragraphOffsets[location.paragraph];
+    final total = _paragraphOffsets.last;
+    if (total == 0) return 0;
+    final currentLength = paragraphs[location.paragraph].length;
+    return ((before + currentLength * location.offset) / total)
+        .clamp(0.0, 1.0)
+        .toDouble();
+  }
+
+  double _viewportTop() {
+    if (!_scroll.hasClients) return 0;
+    final renderObject = _scroll.position.context.notificationContext
+        ?.findRenderObject();
+    return renderObject is RenderBox
+        ? renderObject.localToGlobal(Offset.zero).dy
+        : 0;
+  }
+
+  double _readingTop(double viewportTop) {
+    if (!_chrome) return viewportTop;
+    return viewportTop + MediaQuery.of(context).padding.top + 76;
+  }
+
+  ({
+    ({int paragraph, double offset}) location,
+    RenderParagraph box,
+    double viewportTop,
+  })?
+  _visibleParagraph() {
+    final chapters = _chapters;
+    if (!_scroll.hasClients || chapters == null) return null;
+    final viewportTop = _readingTop(_viewportTop());
+    var top = double.infinity;
+    ({int paragraph, double offset})? location;
+    RenderParagraph? visibleBox;
+    for (final entry in _paragraphContexts.entries) {
+      final renderObject = entry.value.findRenderObject();
+      if (renderObject is! RenderParagraph || !renderObject.hasSize) continue;
+      final paragraphTop = renderObject.localToGlobal(Offset.zero).dy;
+      final paragraphBottom = paragraphTop + renderObject.size.height;
+      if (paragraphBottom <= viewportTop || paragraphTop >= top) continue;
+      top = paragraphTop;
+      visibleBox = renderObject;
+      final localY = (viewportTop - paragraphTop)
+          .clamp(0.0, renderObject.size.height)
+          .toDouble();
+      final textOffset = renderObject
+          .getPositionForOffset(Offset(0, localY))
+          .offset;
+      final textLength = _paragraphsFor(chapters[_chapter])[entry.key].length;
+      location = (
+        paragraph: entry.key,
+        offset: textLength == 0
+            ? 0
+            : (textOffset / textLength).clamp(0.0, 1.0).toDouble(),
+      );
+    }
+    if (location != null && visibleBox != null) {
+      return (location: location, box: visibleBox, viewportTop: viewportTop);
+    }
+    final paragraphs = _paragraphsFor(chapters[_chapter]);
+    if (paragraphs.isNotEmpty) {
+      final index = paragraphs.length - 1;
+      final renderObject = _paragraphContexts[index]?.findRenderObject();
+      if (renderObject is RenderParagraph && renderObject.hasSize) {
+        final lastBottom =
+            renderObject.localToGlobal(Offset.zero).dy +
+            renderObject.size.height;
+        if (lastBottom <= viewportTop ||
+            _scroll.position.pixels >= _scroll.position.maxScrollExtent - 1) {
+          return (
+            location: (paragraph: index, offset: 1),
+            box: renderObject,
+            viewportTop: viewportTop,
+          );
+        }
+      }
+    }
+    return null;
+  }
+
+  void _restoreLocation(
+    ({int paragraph, double offset})? target, {
+    int passes = 16,
+  }) {
+    if (target == null) return;
+    _restoring = true;
+    final generation = ++_restoreGeneration;
+    final paragraphs = _paragraphsFor(_chapters![_chapter]);
+    final targetFraction = _chapterFraction(target, paragraphs);
+
+    void restorePass(int remaining, {bool estimate = false}) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (generation != _restoreGeneration) return;
+        if (!mounted || !_scroll.hasClients) {
+          _restoring = false;
+          return;
+        }
+        final position = _scroll.position;
+        final max = position.maxScrollExtent;
+        if (estimate && max > 0) {
+          position.jumpTo((max * targetFraction).clamp(0.0, max));
+        }
+
+        final visible = _visibleParagraph();
+        if (visible?.location.paragraph == target.paragraph) {
+          final targetContext = _paragraphContexts[target.paragraph];
+          final targetBox = targetContext?.findRenderObject();
+          final atChapterStart =
+              target.paragraph == 0 &&
+              target.offset == 0 &&
+              targetFraction == 0;
+          if (!atChapterStart &&
+              targetBox is RenderParagraph &&
+              targetBox.hasSize) {
+            final textOffset =
+                (paragraphs[target.paragraph].length * target.offset)
+                    .round()
+                    .clamp(0, paragraphs[target.paragraph].length);
+            final caretOffset = targetBox.getOffsetForCaret(
+              TextPosition(offset: textOffset),
+              Rect.zero,
+            );
+            final pointY = targetBox.localToGlobal(caretOffset).dy;
+            final delta = pointY - visible!.viewportTop;
+            final next = (position.pixels + delta).clamp(0.0, max);
+            if ((next - position.pixels).abs() > 1) position.jumpTo(next);
+          }
+          _location = target;
+          _fraction.value = targetFraction;
+          _restoring = false;
+          return;
+        }
+        if (remaining <= 0) {
+          _restoring = false;
+          if (visible != null) {
+            _location = visible.location;
+            _fraction.value = _chapterFraction(visible.location, paragraphs);
+          }
+          return;
+        }
+
+        final currentFraction = visible == null
+            ? (max > 0 ? position.pixels / max : 0.0)
+            : _chapterFraction(visible.location, paragraphs);
+        final correction = (targetFraction - currentFraction) * max;
+        final next = (position.pixels + correction).clamp(0.0, max);
+        if ((next - position.pixels).abs() <= 1) {
+          _restoring = false;
+          return;
+        }
+        position.jumpTo(next);
+        restorePass(remaining - 1);
+      });
+    }
+
+    restorePass(passes, estimate: true);
+  }
+
+  void _preservePositionOnRelayout() {
+    final visible = _visibleParagraph();
+    if (visible == null) return;
+    _restoreGeneration++;
+    final location = visible.location;
+    final paragraphs = _paragraphsFor(_chapters![_chapter]);
+    final textOffset = (paragraphs[location.paragraph].length * location.offset)
+        .round()
+        .clamp(0, paragraphs[location.paragraph].length);
+    final caretOffset = visible.box.getOffsetForCaret(
+      TextPosition(offset: textOffset),
+      Rect.zero,
+    );
+    final targetY = visible.box.localToGlobal(caretOffset).dy;
+    final generation = ++_relayoutGeneration;
+    _restoring = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_scroll.hasClients) return;
-      final max = _scroll.position.maxScrollExtent;
-      final target = (max * _fraction.value).clamp(0, max).toDouble();
-      if ((_scroll.offset - target).abs() > 1) _scroll.jumpTo(target);
-      if (passes > 1) _restoreScroll(passes: passes - 1);
+      if (!mounted ||
+          !_scroll.hasClients ||
+          generation != _relayoutGeneration) {
+        return;
+      }
+      final renderObject = _paragraphContexts[location.paragraph]
+          ?.findRenderObject();
+      if (renderObject is RenderParagraph && renderObject.hasSize) {
+        final caretOffset = renderObject.getOffsetForCaret(
+          TextPosition(offset: textOffset),
+          Rect.zero,
+        );
+        final pointY = renderObject.localToGlobal(caretOffset).dy;
+        final position = _scroll.position;
+        final next = (position.pixels + pointY - targetY).clamp(
+          0.0,
+          position.maxScrollExtent,
+        );
+        if ((next - position.pixels).abs() > 1) position.jumpTo(next);
+      }
+      _location = location;
+      _fraction.value = _chapterFraction(location, paragraphs);
+      _restoring = false;
     });
+  }
+
+  void _registerParagraph(int index, BuildContext context) {
+    _paragraphContexts[index] = context;
+  }
+
+  void _unregisterParagraph(int index, BuildContext context) {
+    if (identical(_paragraphContexts[index], context)) {
+      _paragraphContexts.remove(index);
+    }
   }
 
   bool _onScroll(ScrollNotification n) {
     if (n.depth != 0 || n.metrics.axis != Axis.vertical) return false;
-    final max = n.metrics.maxScrollExtent;
-    if (max > 0) {
-      _fraction.value = (n.metrics.pixels / max).clamp(0.0, 1.0).toDouble();
-      _saveTimer?.cancel();
-      _saveTimer = Timer(const Duration(seconds: 1), _persist);
+    if (_restoring) {
+      if (n is! UserScrollNotification || n.direction == ScrollDirection.idle) {
+        return false;
+      }
+      _restoreGeneration++;
+      _restoring = false;
     }
+    if (_chapters == null) return false;
+    final visible = _visibleParagraph();
+    if (visible != null) {
+      _location = visible.location;
+      _fraction.value = _chapterFraction(
+        visible.location,
+        _paragraphsFor(_chapters![_chapter]),
+      );
+    }
+    _saveTimer?.cancel();
+    _saveTimer = Timer(const Duration(seconds: 1), _persist);
     return false;
   }
 
@@ -154,6 +437,8 @@ class _ReaderScreenState extends State<ReaderScreen>
         percent: s.percent,
         minutesLeft: s.minutes,
         lastOpened: DateTime.now(),
+        paragraph: _location?.paragraph,
+        paragraphOffset: _location?.offset,
       ),
     );
   }
@@ -165,7 +450,12 @@ class _ReaderScreenState extends State<ReaderScreen>
     }
     HapticFeedback.selectionClick();
     _dismissHint();
+    _restoreGeneration++;
+    _relayoutGeneration++;
+    _restoring = false;
     setState(() => _chapter = i);
+    _paragraphContexts.clear();
+    _location = (paragraph: 0, offset: 0);
     _fraction.value = 0;
     if (_scroll.hasClients) _scroll.jumpTo(0);
     _persist();
@@ -262,13 +552,13 @@ class _ReaderScreenState extends State<ReaderScreen>
     if (_lastPrefs != null &&
         !identical(_lastPrefs, prefs) &&
         _chapters != null) {
-      _restoreScroll();
+      _preservePositionOnRelayout();
     }
     _lastPrefs = prefs;
     final theme = prefs.theme;
 
     return PopScope(
-      onPopInvokedWithResult: (_, __) => _persist(),
+      onPopInvokedWithResult: (_, _) => _persist(),
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: theme.isDark
             ? SystemUiOverlayStyle.light
@@ -345,26 +635,32 @@ class _ReaderScreenState extends State<ReaderScreen>
                 prefs.margin,
                 media.padding.bottom + 100,
               ),
-              sliver: SliverToBoxAdapter(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _chapterHeader(theme, style),
-                    for (final paragraph in paragraphs)
-                      Padding(
-                        padding: EdgeInsets.only(bottom: prefs.fontSize * 0.9),
-                        child: Text(
-                          paragraph,
-                          textAlign: prefs.align,
-                          style: style,
-                        ),
-                      ),
-                    Padding(
+              sliver: SliverList.builder(
+                itemCount: paragraphs.length + 2,
+                itemBuilder: (context, index) {
+                  if (index == 0) return _chapterHeader(theme, style);
+                  if (index == paragraphs.length + 1) {
+                    return Padding(
                       padding: const EdgeInsets.only(top: 16),
                       child: _endFooter(theme, isLast),
+                    );
+                  }
+                  final paragraphIndex = index - 1;
+                  return Padding(
+                    padding: EdgeInsets.only(bottom: prefs.fontSize * 0.9),
+                    child: _TrackedParagraph(
+                      key: ValueKey('$_chapter-$paragraphIndex'),
+                      index: paragraphIndex,
+                      onMount: _registerParagraph,
+                      onUnmount: _unregisterParagraph,
+                      child: Text(
+                        paragraphs[paragraphIndex],
+                        textAlign: prefs.align,
+                        style: style,
+                      ),
                     ),
-                  ],
-                ),
+                  );
+                },
               ),
             ),
           ],
@@ -423,6 +719,10 @@ class _ReaderScreenState extends State<ReaderScreen>
           .map((p) => p.trim())
           .where((p) => p.isNotEmpty)
           .toList(growable: false);
+      _paragraphOffsets = List<int>.filled(_paraCache!.length + 1, 0);
+      for (var i = 0; i < _paraCache!.length; i++) {
+        _paragraphOffsets[i + 1] = _paragraphOffsets[i] + _paraCache![i].length;
+      }
     }
     return _paraCache!;
   }
@@ -567,7 +867,7 @@ class _ReaderScreenState extends State<ReaderScreen>
             ),
           ),
           Consumer<UserDataProvider>(
-            builder: (_, u, __) {
+            builder: (_, u, _) {
               final id = widget.book.id;
               final fav = u.isFavorite(id);
               final done = u.isFinished(id);
@@ -684,7 +984,7 @@ class _ReaderScreenState extends State<ReaderScreen>
                   ? const SizedBox.shrink()
                   : ValueListenableBuilder<double>(
                       valueListenable: _fraction,
-                      builder: (_, __, ___) {
+                      builder: (_, _, _) {
                         final s = _stats();
                         return Column(
                           mainAxisSize: MainAxisSize.min,
@@ -781,4 +1081,48 @@ class _ReaderScreenState extends State<ReaderScreen>
       ),
     );
   }
+}
+
+class _TrackedParagraph extends StatefulWidget {
+  const _TrackedParagraph({
+    super.key,
+    required this.index,
+    required this.onMount,
+    required this.onUnmount,
+    required this.child,
+  });
+
+  final int index;
+  final void Function(int, BuildContext) onMount;
+  final void Function(int, BuildContext) onUnmount;
+  final Widget child;
+
+  @override
+  State<_TrackedParagraph> createState() => _TrackedParagraphState();
+}
+
+class _TrackedParagraphState extends State<_TrackedParagraph> {
+  @override
+  void initState() {
+    super.initState();
+    widget.onMount(widget.index, context);
+  }
+
+  @override
+  void didUpdateWidget(covariant _TrackedParagraph oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.index != widget.index) {
+      oldWidget.onUnmount(oldWidget.index, context);
+      widget.onMount(widget.index, context);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.onUnmount(widget.index, context);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

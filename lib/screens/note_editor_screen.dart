@@ -8,6 +8,7 @@ import '../models/note.dart';
 import '../providers/notes_provider.dart';
 import '../widgets/common.dart';
 import '../widgets/note_export.dart';
+import '../widgets/notes_error_banner.dart';
 
 class NoteEditorScreen extends StatefulWidget {
   const NoteEditorScreen({super.key, this.noteId});
@@ -17,10 +18,14 @@ class NoteEditorScreen extends StatefulWidget {
   State<NoteEditorScreen> createState() => _NoteEditorScreenState();
 }
 
-class _NoteEditorScreenState extends State<NoteEditorScreen> {
+class _NoteEditorScreenState extends State<NoteEditorScreen>
+    with WidgetsBindingObserver {
   late final NotesProvider _notes;
   late final TextEditingController _title;
   late final TextEditingController _body;
+  late final ValueNotifier<int> _wordCount;
+  late String _lastObservedTitle;
+  late String _lastObservedBody;
   Note? _note;
   int _color = Note.defaultColorIndex;
   Timer? _debounce;
@@ -29,6 +34,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _notes = context.read<NotesProvider>();
     _note = widget.noteId == null ? null : _notes.byId(widget.noteId!);
     _color = (_note?.colorIndex ?? Note.defaultColorIndex).clamp(
@@ -37,30 +43,65 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     );
     _title = TextEditingController(text: _note?.title ?? '');
     _body = TextEditingController(text: _note?.body ?? '');
+    _wordCount = ValueNotifier(_countWords(_body.text));
+    _lastObservedTitle = _title.text;
+    _lastObservedBody = _body.text;
     _title.addListener(_onChanged);
     _body.addListener(_onChanged);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _debounce?.cancel();
+    _save();
+    _wordCount.dispose();
     _title.dispose();
     _body.dispose();
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
+      _save();
+    }
+  }
+
   void _onChanged() {
-    setState(() {}); 
+    final titleChanged = _title.text != _lastObservedTitle;
+    final bodyChanged = _body.text != _lastObservedBody;
+    if (!titleChanged && !bodyChanged) return;
+
+    _lastObservedTitle = _title.text;
+    _lastObservedBody = _body.text;
+    if (bodyChanged) _wordCount.value = _countWords(_body.text);
+
+    if (!_hasUnsavedChanges) {
+      _debounce?.cancel();
+      return;
+    }
+
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 500), _save);
   }
 
+  bool get _hasUnsavedChanges =>
+      _title.text.trim() != (_note?.title.trim() ?? '') ||
+      _body.text != (_note?.body ?? '') ||
+      _color != (_note?.colorIndex ?? Note.defaultColorIndex);
+
+  int _countWords(String text) => RegExp(r'\S+').allMatches(text).length;
+
   void _save() {
     _debounce?.cancel();
-    if (_deleted) return; 
+    if (_deleted) return;
     final title = _title.text.trim();
     final body = _body.text;
     if (_note == null && title.isEmpty && body.trim().isEmpty) return;
+    if (!_hasUnsavedChanges) return;
     _note = (_note ?? Note.create()).copyWith(
       title: title,
       body: body,
@@ -89,7 +130,6 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     final bg = AppColors.noteColors[_color];
-    final words = RegExp(r'\S+').allMatches(_body.text).length;
 
     return PopScope(
       onPopInvokedWithResult: (didPop, _) {
@@ -124,6 +164,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 22),
             child: Column(
               children: [
+                const NotesErrorBanner(),
                 TextField(
                   controller: _title,
                   textCapitalization: TextCapitalization.sentences,
@@ -178,9 +219,14 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                           ),
                         ),
                       const Spacer(),
-                      Text(
-                        '$words ${words == 1 ? 'word' : 'words'}',
-                        style: t.labelMedium?.copyWith(color: AppColors.muted),
+                      ValueListenableBuilder<int>(
+                        valueListenable: _wordCount,
+                        builder: (context, words, _) => Text(
+                          '$words ${words == 1 ? 'word' : 'words'}',
+                          style: t.labelMedium?.copyWith(
+                            color: AppColors.muted,
+                          ),
+                        ),
                       ),
                     ],
                   ),

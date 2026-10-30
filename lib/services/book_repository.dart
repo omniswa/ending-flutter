@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
+import 'package:html/dom.dart' as html;
+import 'package:html/parser.dart' as html_parser;
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -13,9 +15,16 @@ import '../models/book.dart';
 import 'local_store.dart';
 
 class BookContent {
-  const BookContent(this.chapters, this.titles);
+  const BookContent(this.chapters, this.titles, {this.refreshFailed = false});
   final List<String> chapters;
   final List<String?> titles;
+  final bool refreshFailed;
+}
+
+class BookCatalog {
+  const BookCatalog(this.books, {this.refreshFailed = false});
+  final List<Book> books;
+  final bool refreshFailed;
 }
 
 class BookRepository {
@@ -23,7 +32,7 @@ class BookRepository {
     : _client = client ?? http.Client();
 
   static const _cacheKey = 'books_index_cache';
-  static const _epubExtractionVersion = '1';
+  static const _epubExtractionVersion = '2';
   static const _epubExtractionVersionFile = '.epub-extraction-version';
   final LocalStore _store;
   final http.Client _client;
@@ -32,7 +41,7 @@ class BookRepository {
 
   Uri _resolve(String path) => Uri.parse(AppConfig.baseUrl).resolve(path);
 
-  Future<List<Book>> fetchBooks() async {
+  Future<BookCatalog> fetchBooks() async {
     try {
       final res = await _client
           .get(_resolve(AppConfig.booksIndex))
@@ -43,19 +52,27 @@ class BookRepository {
       final json = jsonDecode(utf8.decode(res.bodyBytes));
       final books = _parse(json);
       await _store.writeJson(_cacheKey, json as Object);
-      return books;
+      return BookCatalog(books);
     } on Object {
       final cached = _store.readJson(_cacheKey);
-      if (cached != null) return _parse(cached);
+      if (cached != null) {
+        return BookCatalog(_parse(cached), refreshFailed: true);
+      }
       rethrow;
     }
   }
 
   List<Book> _parse(Object? json) {
     final out = <Book>[];
+    final ids = <int>{};
     for (final e in json as List) {
       try {
-        out.add(Book.fromJson(e as Map<String, dynamic>));
+        final book = Book.fromJson(e as Map<String, dynamic>);
+        if (!ids.add(book.id)) {
+          debugPrint('Skipping duplicate book ID ${book.id}: $e');
+          continue;
+        }
+        out.add(book);
       } on Object catch (err) {
         debugPrint('Skipping bad book entry: $err\n$e');
       }
@@ -79,8 +96,38 @@ class BookRepository {
     return _inFlight[book.id] = future;
   }
 
-  Future<bool> isDownloaded(Book book) async =>
-      _hasContent(await _bookDir(book));
+  Future<void> downloadBook(Book book) async {
+    final dir = await _bookDir(book);
+    await _ensureDownloaded(book, dir, refresh: false);
+  }
+
+  Future<bool> isDownloaded(Book book) async {
+    final dir = await _bookDir(book);
+    if (!await dir.exists()) return false;
+
+    final entries = await dir.list().toList();
+    final files = entries.whereType<File>().map(
+      (file) => p.basename(file.path),
+    );
+    final fileNames = files.toSet();
+    if (fileNames.any((name) => RegExp(r'^\d+\.txt$').hasMatch(name))) {
+      return true;
+    }
+
+    if (!fileNames.contains('manifest.json')) return false;
+    try {
+      final manifest = jsonDecode(
+        await File(p.join(dir.path, 'manifest.json')).readAsString(),
+      ) as Map<String, dynamic>;
+      final chapters = manifest['chapters'] as List;
+      return chapters.any((entry) {
+        final file = (entry as Map<String, dynamic>)['file'] as String;
+        return fileNames.contains(p.basename(file));
+      });
+    } on Object {
+      return false;
+    }
+  }
 
   Future<void> deleteDownload(Book book) async {
     await _inFlight[book.id]?.catchError((_) => const BookContent([], []));
@@ -90,6 +137,17 @@ class BookRepository {
 
   Future<BookContent> _loadContent(Book book, {required bool refresh}) async {
     final dir = await _bookDir(book);
+    final refreshFailed = await _ensureDownloaded(book, dir, refresh: refresh);
+    final content = await _readContent(dir);
+    if (!refreshFailed) return content;
+    return BookContent(content.chapters, content.titles, refreshFailed: true);
+  }
+
+  Future<bool> _ensureDownloaded(
+    Book book,
+    Directory dir, {
+    required bool refresh,
+  }) async {
     final hasLocal = _hasContent(dir);
     final source = _readSource(dir);
     final epubExtractionVersionFile = File(
@@ -109,9 +167,10 @@ class BookRepository {
       } on Object catch (e) {
         if (!hasLocal) rethrow;
         debugPrint('Update for "${book.title}" failed, using local copy: $e');
+        return true;
       }
     }
-    return _readContent(dir);
+    return false;
   }
 
   bool _hasContent(Directory dir) {
@@ -283,43 +342,9 @@ Map<String, String> _extractEpub(Archive archive) {
   }
 
   final basePath = p.posix.dirname(packagePath);
-  const frontMatterTypes = {
-    'cover',
-    'title-page',
-    'copyright-page',
-    'toc',
-    'dedication',
-    'acknowledgments',
-    'acknowledgements',
-    'uncopyright',
-    'endnotes',
-    'colophon',
-    'foreword',
-    'preface',
-  };
-  final frontMatterPaths = <String>{};
-  final frontMatterReferences = [
-    ...packageXml.findAllElements('reference', namespaceUri: '*'),
-    ...packageXml.findAllElements('a', namespaceUri: '*'),
-  ];
-  for (final reference in frontMatterReferences) {
-    final types = [
-      reference.getAttribute('type') ?? '',
-      reference.getAttribute(
-            'type',
-            namespaceUri: 'http://www.idpf.org/2007/ops',
-          ) ??
-          '',
-    ].join(' ').toLowerCase().split(RegExp(r'\s+'));
-    final href = reference.getAttribute('href');
-    if (href == null || !types.any(frontMatterTypes.contains)) continue;
-    final path = _resolveEpubHref(basePath, href);
-    if (path != null) frontMatterPaths.add(path);
-  }
-
   final chapterTexts = <String>[];
   final titles = <String?>[];
-  var startedMainContent = false;
+  var skippedChapters = 0;
   for (final itemRef in packageXml.findAllElements(
     'itemref',
     namespaceUri: '*',
@@ -338,39 +363,37 @@ Map<String, String> _extractEpub(Archive archive) {
     final chapter = files[path];
     if (chapter == null) continue;
 
-    final XmlDocument document;
+    final html.Document document;
     try {
-      document = XmlDocument.parse(
+      document = html_parser.parse(
         _stripBom(utf8.decode(chapter, allowMalformed: true)),
-        entityMapping: const XmlDefaultEntityMapping.html5(),
       );
-    } on XmlException catch (e) {
-      debugPrint('Skipping unparsable EPUB chapter "$path": $e');
+    } on Object catch (e) {
+      skippedChapters++;
+      debugPrint('Unable to parse EPUB chapter "$path": $e');
       continue;
     }
-    final bodies = document.findAllElements('body', namespaceUri: '*');
-    final body = bodies.isEmpty ? document.rootElement : bodies.first;
-    final text = _epubText(body);
+    final body = document.body ?? document.documentElement;
+    if (body == null) {
+      skippedChapters++;
+      debugPrint('Unable to parse EPUB chapter "$path": no document body.');
+      continue;
+    }
+    final text = _htmlEpubText(body);
     if (text.isEmpty) continue;
     final heading = document
-        .findAllElements('*', namespaceUri: '*')
-        .where((element) => RegExp(r'^h[1-6]$').hasMatch(element.name.local))
-        .map((element) => _epubText(element))
+        .querySelectorAll('h1, h2, h3, h4, h5, h6')
+        .map(_htmlEpubText)
         .firstWhere((value) => value.isNotEmpty, orElse: () => '');
-    final documentTitle = document
-        .findAllElements('title', namespaceUri: '*')
-        .map((element) => _epubText(element))
-        .firstWhere((value) => value.isNotEmpty, orElse: () => '');
-    final isFrontMatter =
-        frontMatterPaths.contains(path) ||
-        (!startedMainContent &&
-            _isEpubFrontMatter(path, heading, documentTitle, text));
-    if (isFrontMatter) continue;
-    startedMainContent = true;
     chapterTexts.add(text);
     titles.add(heading.isEmpty ? null : heading);
   }
 
+  if (skippedChapters > 0) {
+    debugPrint(
+      'Skipped $skippedChapters EPUB chapter(s) that could not be parsed.',
+    );
+  }
   if (chapterTexts.isEmpty) {
     throw const FormatException('This EPUB has no readable chapters.');
   }
@@ -383,32 +406,6 @@ Map<String, String> _extractEpub(Archive archive) {
   }
   out['manifest.json'] = jsonEncode({'chapters': entries});
   return out;
-}
-
-bool _isEpubFrontMatter(
-  String path,
-  String heading,
-  String documentTitle,
-  String text,
-) {
-  final normalizedPath = path.toLowerCase();
-  final filenameIndicatesFrontMatter = RegExp(
-    r'(^|[/_.\-\s])(cover|coverpage|title|title[-_ ]?page|copyright(?:[-_ ]?page)?|colophon|dedication|frontispiece|contents|table[-_ ]of[-_ ]contents|toc)([/_.\-\s]|$)',
-  ).hasMatch(normalizedPath);
-  if (filenameIndicatesFrontMatter) return true;
-
-  bool isFrontMatterTitle(String title) => RegExp(
-    r'^(cover(?: page)?|title(?: page)?|copyright(?: page)?|colophon|dedication|frontispiece|contents|table of contents|acknowledg(?:e)?ments)$',
-    caseSensitive: false,
-  ).hasMatch(title.trim());
-  if (isFrontMatterTitle(heading) || isFrontMatterTitle(documentTitle)) {
-    return true;
-  }
-
-  return RegExp(
-    r'\b(copyright|all rights reserved|isbn|cataloging-in-publication)\b',
-    caseSensitive: false,
-  ).hasMatch(text.length > 1200 ? text.substring(0, 1200) : text);
 }
 
 String _stripBom(String s) => s.startsWith('﻿') ? s.substring(1) : s;
@@ -437,7 +434,7 @@ String? _normalizeEpubPath(String path) {
   return segments.join('/');
 }
 
-String _epubText(XmlNode node) {
+String _htmlEpubText(html.Node node) {
   final output = StringBuffer();
   const blockElements = {
     'address',
@@ -459,24 +456,24 @@ String _epubText(XmlNode node) {
     'ul',
   };
 
-  void visit(XmlNode current) {
-    if (current is XmlText) {
-      output.write(current.value);
-    } else if (current is XmlElement) {
-      final name = current.name.local.toLowerCase();
+  void visit(html.Node current) {
+    if (current is html.Text) {
+      output.write(current.data);
+    } else if (current is html.Element) {
+      final name = current.localName?.toLowerCase();
       if (name == 'script' || name == 'style' || name == 'nav') return;
       final isBlock = blockElements.contains(name);
       if (isBlock) output.write('\n\n');
       if (name == 'br') {
         output.write('\n');
       } else {
-        for (final child in current.children) {
+        for (final child in current.nodes) {
           visit(child);
         }
       }
       if (isBlock) output.write('\n\n');
     } else {
-      for (final child in current.children) {
+      for (final child in current.nodes) {
         visit(child);
       }
     }
