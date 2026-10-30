@@ -154,7 +154,7 @@ class BookCard extends StatelessWidget {
                   style: googleFontStyleWithWeight(
                     small,
                     FontWeight.w800,
-                  )?.copyWith(color: Color(0xFFF0C9A8)),
+                  )?.copyWith(color: const Color(0xFFF0C9A8)),
                 ),
                 TextSpan(
                   text: ' · ${formatTimeLeft(p.minutesLeft)}',

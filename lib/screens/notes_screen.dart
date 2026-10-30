@@ -17,10 +17,11 @@ class NotesScreen extends StatelessWidget {
     final messenger = ScaffoldMessenger.of(context);
     try {
       final n = await context.read<NotesProvider>().importFiles();
-      if (n > 0)
+      if (n > 0) {
         messenger.showSnackBar(
           SnackBar(content: Text('Imported $n ${n == 1 ? 'note' : 'notes'}')),
         );
+      }
     } on Object {
       messenger.showSnackBar(
         const SnackBar(content: Text('Couldn\'t import that file.')),
@@ -85,7 +86,7 @@ class NotesScreen extends StatelessWidget {
                       onDark: true,
                       onTap: () => _exportAll(context),
                     ),
-                  SizedBox(width: 10),
+                  const SizedBox(width: 10),
                   RoundIconButton(
                     icon: Icons.file_upload_outlined,
                     tooltip: 'Import .txt / .md',
@@ -197,8 +198,9 @@ class _NoteCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   onSelected: (v) {
-                    if (v == 'export')
+                    if (v == 'export') {
                       exportNote(context, title: note.title, body: note.body);
+                    }
                     if (v == 'delete') _delete(context);
                   },
                   itemBuilder: (_) => const [
@@ -251,15 +253,19 @@ class _NoteCard extends StatelessWidget {
               children: [
                 Icon(
                   Icons.schedule_rounded,
-                  size: 8,
+                  size: 12,
                   color: AppColors.ink.withValues(alpha: 0.45),
                 ),
                 const SizedBox(width: 4),
-                Text(
-                  formatTimestamp(note.updatedAt),
-                  style: t.labelSmall?.copyWith(
-                    color: AppColors.ink.withValues(alpha: 0.55),
-                    fontSize: 8,
+                Expanded(
+                  child: Text(
+                    formatTimestamp(note.updatedAt),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: t.labelSmall?.copyWith(
+                      color: AppColors.ink.withValues(alpha: 0.55),
+                      fontSize: 10,
+                    ),
                   ),
                 ),
               ],

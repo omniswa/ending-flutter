@@ -79,7 +79,12 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   Widget build(BuildContext context) {
     final lib = context.watch<LibraryProvider>();
     final user = context.watch<UserDataProvider>();
-    final all = user.favorites.length;
+    final libReady = lib.state == LoadState.ready;
+    // Only count favorites that can actually be shown; entries whose book is
+    // no longer in the catalog would otherwise inflate the count.
+    final all = libReady
+        ? user.favorites.where((f) => lib.byId(f.bookId) != null).length
+        : user.favorites.length;
     final items = _items(lib, user);
 
     return SafeArea(
@@ -192,6 +197,9 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                     title: all == 0 ? 'No favorites yet' : 'Nothing here',
                     message: all == 0
                         ? 'Tap the heart on any book to save it here.'
+                        : !libReady
+                        ? 'Your library isn\'t loaded yet. Pull to refresh on '
+                              'the Home tab.'
                         : 'No books match this filter.',
                   )
                 : GridView.builder(
