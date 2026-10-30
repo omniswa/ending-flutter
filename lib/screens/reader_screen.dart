@@ -80,6 +80,9 @@ class _ReaderScreenState extends State<ReaderScreen>
   }
 
   Future<void> _load({bool refresh = false}) async {
+    // Save the current position first so a re-download doesn't jump back to
+    // an older saved position.
+    if (refresh) _persist();
     setState(() {
       _error = null;
       _chapters = null;
@@ -260,8 +263,9 @@ class _ReaderScreenState extends State<ReaderScreen>
     final prefs = context.watch<ReaderSettingsProvider>().prefs;
     if (_lastPrefs != null &&
         !identical(_lastPrefs, prefs) &&
-        _chapters != null)
+        _chapters != null) {
       _restoreScroll();
+    }
     _lastPrefs = prefs;
     final theme = prefs.theme;
 

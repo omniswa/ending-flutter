@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../models/book.dart';
@@ -57,22 +59,52 @@ class LibraryProvider extends ChangeNotifier {
       _index = {for (final b in list) b.id: b};
       _filtered = null;
       _state = LoadState.ready;
-      for (final book in list) {
-        refreshDownloadStatus(book).catchError((
-          Object error,
-          StackTrace stack,
-        ) {
-          debugPrint(
-            'Checking offline status for "${book.title}" failed: $error\n$stack',
-          );
-        });
-      }
+      unawaited(_refreshAllDownloadStatuses(list));
     } on Object catch (e, st) {
       _error = e;
       debugPrint('Library load failed: $e\n$st');
       if (_books.isEmpty) _state = LoadState.error;
     }
     notifyListeners();
+  }
+
+  /// Checks every book's offline status concurrently and notifies once,
+  /// instead of rebuilding the whole library twice per book.
+  Future<void> _refreshAllDownloadStatuses(List<Book> list) async {
+    final results = await Future.wait(
+      list.map((book) async {
+        try {
+          return (id: book.id, downloaded: await _repo.isDownloaded(book));
+        } on Object catch (error, stack) {
+          debugPrint(
+            'Checking offline status for "${book.title}" failed: $error\n$stack',
+          );
+          return null;
+        }
+      }),
+    );
+    for (final r in results) {
+      if (r == null || _downloading.contains(r.id)) continue;
+      if (r.downloaded) {
+        _downloaded.add(r.id);
+      } else {
+        _downloaded.remove(r.id);
+      }
+    }
+    notifyListeners();
+  }
+
+  bool _disposed = false;
+
+  @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 
   Future<void> refreshDownloadStatus(Book book) async {

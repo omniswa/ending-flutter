@@ -23,7 +23,9 @@ class BookRepository {
     : _client = client ?? http.Client();
 
   static const _cacheKey = 'books_index_cache';
-  static const _epubExtractionVersion = '2';
+  // Bumped to 3: earlier versions silently dropped chapters whose href was
+  // percent-encoded, so existing downloads are re-extracted once.
+  static const _epubExtractionVersion = '3';
   static const _epubExtractionVersionFile = '.epub-extraction-version';
   final LocalStore _store;
   final http.Client _client;
@@ -313,9 +315,7 @@ Map<String, String> _extractEpub(Archive archive) {
     ].join(' ').toLowerCase().split(RegExp(r'\s+'));
     final href = reference.getAttribute('href');
     if (href == null || !types.any(frontMatterTypes.contains)) continue;
-    final path = _normalizeEpubPath(
-      p.posix.join(basePath, Uri.parse(href).path),
-    );
+    final path = _resolveEpubHref(basePath, href);
     if (path != null) frontMatterPaths.add(path);
   }
 
@@ -335,17 +335,22 @@ Map<String, String> _extractEpub(Archive archive) {
             !item.href.toLowerCase().endsWith('.html'))) {
       continue;
     }
-    final path = _normalizeEpubPath(
-      p.posix.join(basePath, Uri.parse(item.href).path),
-    );
+    final path = _resolveEpubHref(basePath, item.href);
     if (path == null) continue;
     final chapter = files[path];
     if (chapter == null) continue;
 
-    final document = XmlDocument.parse(
-      utf8.decode(chapter, allowMalformed: true),
-      entityMapping: const XmlDefaultEntityMapping.html5(),
-    );
+    // One malformed chapter should not make the whole book unreadable.
+    final XmlDocument document;
+    try {
+      document = XmlDocument.parse(
+        _stripBom(utf8.decode(chapter, allowMalformed: true)),
+        entityMapping: const XmlDefaultEntityMapping.html5(),
+      );
+    } on XmlException catch (e) {
+      debugPrint('Skipping unparsable EPUB chapter "$path": $e');
+      continue;
+    }
     final bodies = document.findAllElements('body', namespaceUri: '*');
     final body = bodies.isEmpty ? document.rootElement : bodies.first;
     final text = _epubText(body);
@@ -407,6 +412,22 @@ bool _isEpubFrontMatter(
     r'\b(copyright|all rights reserved|isbn|cataloging-in-publication)\b',
     caseSensitive: false,
   ).hasMatch(text.length > 1200 ? text.substring(0, 1200) : text);
+}
+
+String _stripBom(String s) => s.startsWith('﻿') ? s.substring(1) : s;
+
+/// Resolves a manifest/reference href against the package directory.
+///
+/// Hrefs are URL-encoded (e.g. `chapter%201.xhtml`) while zip entry names are
+/// not, so the path must be decoded before it can be looked up.
+String? _resolveEpubHref(String basePath, String href) {
+  final String path;
+  try {
+    path = Uri.decodeComponent(Uri.parse(href).path);
+  } on Object {
+    return null;
+  }
+  return _normalizeEpubPath(p.posix.join(basePath, path));
 }
 
 String? _normalizeEpubPath(String path) {

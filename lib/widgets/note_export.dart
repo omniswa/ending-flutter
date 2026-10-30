@@ -77,8 +77,9 @@ Future<void> exportNote(
       body: body,
       format: format,
     );
-    if (saved)
+    if (saved) {
       messenger.showSnackBar(const SnackBar(content: Text('Note exported')));
+    }
   } on Object {
     messenger.showSnackBar(
       const SnackBar(content: Text('Couldn\'t export that note.')),
