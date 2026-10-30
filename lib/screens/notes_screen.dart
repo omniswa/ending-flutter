@@ -248,12 +248,12 @@ class _NoteCard extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.only(right: 10, top: 6),
+            padding: const EdgeInsets.only(right: 6, top: 6),
             child: Row(
               children: [
                 Icon(
                   Icons.schedule_rounded,
-                  size: 12,
+                  size: 9,
                   color: AppColors.ink.withValues(alpha: 0.45),
                 ),
                 const SizedBox(width: 4),
@@ -264,7 +264,7 @@ class _NoteCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: t.labelSmall?.copyWith(
                       color: AppColors.ink.withValues(alpha: 0.55),
-                      fontSize: 10,
+                      fontSize: 9,
                     ),
                   ),
                 ),

@@ -347,27 +347,26 @@ class _ReaderScreenState extends State<ReaderScreen>
                 prefs.margin,
                 media.padding.bottom + 100,
               ),
-              sliver: SliverMainAxisGroup(
-                slivers: [
-                  SliverToBoxAdapter(child: _chapterHeader(theme, style)),
-                  SliverList.builder(
-                    itemCount: paragraphs.length,
-                    itemBuilder: (_, i) => Padding(
-                      padding: EdgeInsets.only(bottom: prefs.fontSize * 0.9),
-                      child: Text(
-                        paragraphs[i],
-                        textAlign: prefs.align,
-                        style: style,
+              sliver: SliverToBoxAdapter(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _chapterHeader(theme, style),
+                    for (final paragraph in paragraphs)
+                      Padding(
+                        padding: EdgeInsets.only(bottom: prefs.fontSize * 0.9),
+                        child: Text(
+                          paragraph,
+                          textAlign: prefs.align,
+                          style: style,
+                        ),
                       ),
-                    ),
-                  ),
-                  SliverToBoxAdapter(
-                    child: Padding(
+                    Padding(
                       padding: const EdgeInsets.only(top: 16),
                       child: _endFooter(theme, isLast),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ],
