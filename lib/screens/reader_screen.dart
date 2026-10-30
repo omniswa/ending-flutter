@@ -52,8 +52,9 @@ class _ReaderScreenState extends State<ReaderScreen>
   int _relayoutGeneration = 0;
   int _restoreGeneration = 0;
 
-  static const _swipeVelocity = 700.0;
-  static const _horizontalSwipeRatio = 2.0;
+  static const _swipeDistance = 48.0;
+  static const _swipeVelocity = 500.0;
+  double _horizontalDragDistance = 0;
 
   @override
   void initState() {
@@ -458,7 +459,10 @@ class _ReaderScreenState extends State<ReaderScreen>
     _paragraphContexts.clear();
     _location = (paragraph: 0, offset: 0);
     _fraction.value = 0;
-    if (_scroll.hasClients) _scroll.jumpTo(0);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _chapter != i || !_scroll.hasClients) return;
+      _scroll.jumpTo(0);
+    });
     _persist();
   }
 
@@ -476,14 +480,14 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   void _onSwipe(DragEndDetails d) {
     final chapters = _chapters;
-    final velocity = d.velocity.pixelsPerSecond;
-    final v = d.primaryVelocity ?? velocity.dx;
+    final velocity = d.primaryVelocity ?? d.velocity.pixelsPerSecond.dx;
+    final distance = _horizontalDragDistance;
+    _horizontalDragDistance = 0;
     if (chapters == null ||
-        v.abs() < _swipeVelocity ||
-        v.abs() < velocity.dy.abs() * _horizontalSwipeRatio) {
+        (distance.abs() < _swipeDistance && velocity.abs() < _swipeVelocity)) {
       return;
     }
-    if (v < 0) {
+    if ((distance.abs() >= _swipeDistance ? distance : velocity) < 0) {
       if (_chapter < chapters.length - 1) _goTo(_chapter + 1);
     } else {
       _goTo(_chapter - 1);
@@ -628,6 +632,10 @@ class _ReaderScreenState extends State<ReaderScreen>
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onTap: _toggleChrome,
+      onHorizontalDragStart: (_) => _horizontalDragDistance = 0,
+      onHorizontalDragUpdate: (details) {
+        _horizontalDragDistance += details.primaryDelta ?? 0;
+      },
       onHorizontalDragEnd: _onSwipe,
       child: NotificationListener<ScrollNotification>(
         onNotification: _onScroll,
