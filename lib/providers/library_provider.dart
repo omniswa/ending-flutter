@@ -68,8 +68,6 @@ class LibraryProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Checks every book's offline status concurrently and notifies once,
-  /// instead of rebuilding the whole library twice per book.
   Future<void> _refreshAllDownloadStatuses(List<Book> list) async {
     final results = await Future.wait(
       list.map((book) async {

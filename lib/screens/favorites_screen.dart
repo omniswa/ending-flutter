@@ -80,8 +80,6 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     final lib = context.watch<LibraryProvider>();
     final user = context.watch<UserDataProvider>();
     final libReady = lib.state == LoadState.ready;
-    // Only count favorites that can actually be shown; entries whose book is
-    // no longer in the catalog would otherwise inflate the count.
     final all = libReady
         ? user.favorites.where((f) => lib.byId(f.bookId) != null).length
         : user.favorites.length;

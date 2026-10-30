@@ -23,9 +23,7 @@ class BookRepository {
     : _client = client ?? http.Client();
 
   static const _cacheKey = 'books_index_cache';
-  // Bumped to 3: earlier versions silently dropped chapters whose href was
-  // percent-encoded, so existing downloads are re-extracted once.
-  static const _epubExtractionVersion = '3';
+  static const _epubExtractionVersion = '1';
   static const _epubExtractionVersionFile = '.epub-extraction-version';
   final LocalStore _store;
   final http.Client _client;
@@ -340,7 +338,6 @@ Map<String, String> _extractEpub(Archive archive) {
     final chapter = files[path];
     if (chapter == null) continue;
 
-    // One malformed chapter should not make the whole book unreadable.
     final XmlDocument document;
     try {
       document = XmlDocument.parse(
@@ -416,10 +413,6 @@ bool _isEpubFrontMatter(
 
 String _stripBom(String s) => s.startsWith('﻿') ? s.substring(1) : s;
 
-/// Resolves a manifest/reference href against the package directory.
-///
-/// Hrefs are URL-encoded (e.g. `chapter%201.xhtml`) while zip entry names are
-/// not, so the path must be decoded before it can be looked up.
 String? _resolveEpubHref(String basePath, String href) {
   final String path;
   try {
