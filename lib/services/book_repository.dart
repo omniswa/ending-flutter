@@ -291,6 +291,9 @@ Map<String, String> _extractEpub(Archive archive) {
     'dedication',
     'acknowledgments',
     'acknowledgements',
+    'uncopyright',
+    'endnotes',
+    'colophon',
     'foreword',
     'preface',
   };

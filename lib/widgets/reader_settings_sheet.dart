@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../core/theme.dart';
@@ -54,7 +53,7 @@ class _ReaderSettingsSheet extends StatelessWidget {
                   ChoiceChip(
                     selected: f == prefs.font,
                     showCheckmark: false,
-                    label: Text(f.family, style: GoogleFonts.getFont(f.family, color: f == prefs.font ? Colors.white : AppColors.ink)),
+                    label: Text(f.family, style: f.style.copyWith(color: f == prefs.font ? Colors.white : AppColors.ink)),
                     onSelected: (_) => provider.update(prefs.copyWith(font: f)),
                   ),
               ],

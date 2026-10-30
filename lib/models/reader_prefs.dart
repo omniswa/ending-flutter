@@ -23,6 +23,10 @@ enum ReaderFont {
 
   const ReaderFont(this.family);
   final String family;
+
+  TextStyle get style => this == atkinson
+      ? const TextStyle(fontFamily: 'AtkinsonHyperlegible')
+      : GoogleFonts.getFont(family);
 }
 
 @immutable
@@ -63,8 +67,7 @@ class ReaderPrefs {
   final double lineHeight;
   final double margin;
 
-  TextStyle get textStyle => GoogleFonts.getFont(
-        font.family,
+  TextStyle get textStyle => font.style.copyWith(
         fontSize: fontSize,
         height: lineHeight,
         color: theme.fg,

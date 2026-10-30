@@ -3,14 +3,11 @@ import 'package:google_fonts/google_fonts.dart';
 
 TextStyle? googleFontStyleWithWeight(TextStyle? style, FontWeight weight) {
   if (style == null) return null;
-  final fontFamily = style.fontFamilyFallback?.first;
-  if (fontFamily == null) {
-    throw ArgumentError.value(
-      style,
-      'style',
-      'Expected a GoogleFonts style with a font family fallback.',
-    );
+  final fontFamilyFallback = style.fontFamilyFallback;
+  if (fontFamilyFallback == null || fontFamilyFallback.isEmpty) {
+    return style.copyWith(fontWeight: weight);
   }
+  final fontFamily = fontFamilyFallback.first;
   return GoogleFonts.getFont(fontFamily, textStyle: style, fontWeight: weight);
 }
 
