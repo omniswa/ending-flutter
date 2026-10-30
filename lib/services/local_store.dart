@@ -29,6 +29,8 @@ class LocalStore {
     }
   }
 
+  Future<bool> remove(String key) => _prefs.remove(key);
+
   Future<File> _file(String name) async {
     final dir = await getApplicationSupportDirectory();
     return File(p.join(dir.path, name));

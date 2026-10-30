@@ -54,7 +54,10 @@ class UserDataProvider extends ChangeNotifier {
         }
       }
     }
-    if (migrated) _saveFinished(notify: false);
+    if (migrated) {
+      _saveFinished(notify: false);
+      _saveFavs(notify: false);
+    }
   }
 
   List<FavoriteEntry> get favorites => List.unmodifiable(_favs.values);
@@ -125,9 +128,9 @@ class UserDataProvider extends ChangeNotifier {
     super.dispose();
   }
 
-  void _saveFavs() {
+  void _saveFavs({bool notify = true}) {
     _store.writeJson(_favKey, _favs.values.map((e) => e.toJson()).toList());
-    notifyListeners();
+    if (notify) notifyListeners();
   }
 
   void _saveFinished({bool notify = true}) {

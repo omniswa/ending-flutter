@@ -31,7 +31,8 @@ class BookRepository {
   BookRepository(this._store, {http.Client? client})
     : _client = client ?? http.Client();
 
-  static const _cacheKey = 'books_index_cache';
+  static const _legacyCacheKey = 'books_index_cache';
+  static const _cacheFile = 'books_index_cache.json';
   static const _epubExtractionVersion = '2';
   static const _epubExtractionVersionFile = '.epub-extraction-version';
   final LocalStore _store;
@@ -42,6 +43,8 @@ class BookRepository {
   Uri _resolve(String path) => Uri.parse(AppConfig.baseUrl).resolve(path);
 
   Future<BookCatalog> fetchBooks() async {
+    late final List<Book> books;
+    late final Object json;
     try {
       final res = await _client
           .get(_resolve(AppConfig.booksIndex))
@@ -49,16 +52,49 @@ class BookRepository {
       if (res.statusCode != 200) {
         throw HttpException('Catalog request failed (${res.statusCode})');
       }
-      final json = jsonDecode(utf8.decode(res.bodyBytes));
-      final books = _parse(json);
-      await _store.writeJson(_cacheKey, json as Object);
-      return BookCatalog(books);
+      json = jsonDecode(utf8.decode(res.bodyBytes)) as Object;
+      books = _parse(json);
     } on Object {
-      final cached = _store.readJson(_cacheKey);
+      final cached = await _readCachedCatalog();
       if (cached != null) {
-        return BookCatalog(_parse(cached), refreshFailed: true);
+        return BookCatalog(cached, refreshFailed: true);
       }
       rethrow;
+    }
+    try {
+      await _store.writeFile(_cacheFile, json);
+      await _removeLegacyCache();
+    } on Object catch (error, stackTrace) {
+      debugPrint('Saving book catalog cache failed: $error\n$stackTrace');
+    }
+    return BookCatalog(books);
+  }
+
+  Future<List<Book>?> _readCachedCatalog() async {
+    final cached = await _store.readFile(_cacheFile);
+    if (cached != null) {
+      await _removeLegacyCache();
+      return _parse(cached);
+    }
+
+    final legacy = _store.readJson(_legacyCacheKey);
+    if (legacy == null) return null;
+    try {
+      await _store.writeFile(_cacheFile, legacy);
+      await _removeLegacyCache();
+    } on Object catch (error, stackTrace) {
+      debugPrint('Migrating book catalog cache failed: $error\n$stackTrace');
+    }
+    return _parse(legacy);
+  }
+
+  Future<void> _removeLegacyCache() async {
+    try {
+      await _store.remove(_legacyCacheKey);
+    } on Object catch (error, stackTrace) {
+      debugPrint(
+        'Removing legacy book catalog cache failed: $error\n$stackTrace',
+      );
     }
   }
 
@@ -97,8 +133,7 @@ class BookRepository {
   }
 
   Future<void> downloadBook(Book book) async {
-    final dir = await _bookDir(book);
-    await _ensureDownloaded(book, dir, refresh: false);
+    await loadContent(book);
   }
 
   Future<bool> isDownloaded(Book book) async {
@@ -256,6 +291,7 @@ class BookRepository {
     final tmp = Directory('${dir.path}.tmp');
     if (tmp.existsSync()) await tmp.delete(recursive: true);
     await tmp.create(recursive: true);
+    var movedOld = false;
     try {
       for (final e in chapters.entries) {
         await File(p.join(tmp.path, e.key)).writeAsString(e.value, flush: true);
@@ -266,11 +302,37 @@ class BookRepository {
         await File(p.join(tmp.path, _epubExtractionVersionFile))
             .writeAsString(_epubExtractionVersion, flush: true);
       }
-      if (dir.existsSync()) await dir.delete(recursive: true);
+      final old = Directory('${dir.path}.old');
+      if (old.existsSync()) {
+        if (dir.existsSync()) {
+          await old.delete(recursive: true);
+        } else {
+          await old.rename(dir.path);
+        }
+      }
+      if (dir.existsSync()) {
+        await dir.rename(old.path);
+        movedOld = true;
+      }
       await tmp.rename(dir.path);
-    } on Object {
-      if (tmp.existsSync()) await tmp.delete(recursive: true);
-      rethrow;
+      if (movedOld) await old.delete(recursive: true);
+    } on Object catch (error, stackTrace) {
+      try {
+        final old = Directory('${dir.path}.old');
+        if (movedOld && old.existsSync()) {
+          if (dir.existsSync()) await dir.delete(recursive: true);
+          await old.rename(dir.path);
+        }
+        if (tmp.existsSync()) await tmp.delete(recursive: true);
+      } on Object catch (rollbackError, rollbackStackTrace) {
+        Error.throwWithStackTrace(
+          StateError(
+            'Download failed: $error. Rollback failed: $rollbackError',
+          ),
+          rollbackStackTrace,
+        );
+      }
+      Error.throwWithStackTrace(error, stackTrace);
     }
   }
 }
@@ -373,7 +435,7 @@ Map<String, String> _extractEpub(Archive archive) {
       debugPrint('Unable to parse EPUB chapter "$path": $e');
       continue;
     }
-    final body = document.body ?? document.documentElement;
+    final body = document.body;
     if (body == null) {
       skippedChapters++;
       debugPrint('Unable to parse EPUB chapter "$path": no document body.');
@@ -408,7 +470,7 @@ Map<String, String> _extractEpub(Archive archive) {
   return out;
 }
 
-String _stripBom(String s) => s.startsWith('﻿') ? s.substring(1) : s;
+String _stripBom(String s) => s.startsWith('\uFEFF') ? s.substring(1) : s;
 
 String? _resolveEpubHref(String basePath, String href) {
   final String path;
@@ -440,18 +502,29 @@ String _htmlEpubText(html.Node node) {
     'address',
     'article',
     'blockquote',
+    'dd',
     'div',
+    'dt',
+    'figcaption',
+    'figure',
+    'footer',
+    'header',
     'h1',
     'h2',
     'h3',
     'h4',
     'h5',
     'h6',
+    'hr',
     'li',
     'ol',
     'p',
+    'pre',
     'section',
+    'aside',
     'table',
+    'td',
+    'th',
     'tr',
     'ul',
   };
@@ -483,7 +556,7 @@ String _htmlEpubText(html.Node node) {
   return output
       .toString()
       .split(RegExp(r'\n\s*\n+'))
-      .map((paragraph) => paragraph.replaceAll(RegExp(r'\s+'), ' ').trim())
+      .map((paragraph) => paragraph.replaceAll(RegExp(r'[ \t]+'), ' ').trim())
       .where((paragraph) => paragraph.isNotEmpty)
       .join('\n\n');
 }

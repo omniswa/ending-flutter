@@ -52,7 +52,8 @@ class _ReaderScreenState extends State<ReaderScreen>
   int _relayoutGeneration = 0;
   int _restoreGeneration = 0;
 
-  static const _swipeVelocity = 300.0;
+  static const _swipeVelocity = 700.0;
+  static const _horizontalSwipeRatio = 2.0;
 
   @override
   void initState() {
@@ -475,10 +476,15 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   void _onSwipe(DragEndDetails d) {
     final chapters = _chapters;
-    final v = d.primaryVelocity ?? 0;
-    if (chapters == null || v.abs() < _swipeVelocity) return;
+    final velocity = d.velocity.pixelsPerSecond;
+    final v = d.primaryVelocity ?? velocity.dx;
+    if (chapters == null ||
+        v.abs() < _swipeVelocity ||
+        v.abs() < velocity.dy.abs() * _horizontalSwipeRatio) {
+      return;
+    }
     if (v < 0) {
-      _next();
+      if (_chapter < chapters.length - 1) _goTo(_chapter + 1);
     } else {
       _goTo(_chapter - 1);
     }
@@ -712,13 +718,20 @@ class _ReaderScreenState extends State<ReaderScreen>
   List<String> _paragraphsFor(String text) {
     if (_paraCache == null || !identical(_paraSource, text)) {
       _paraSource = text;
-      _paraCache = text
-          .replaceAll('\r\n', '\n')
-          .trim()
+      final normalized = text.replaceAll('\r\n', '\n').trim();
+      var paragraphs = normalized
           .split(RegExp(r'\n\s*\n'))
           .map((p) => p.trim())
           .where((p) => p.isNotEmpty)
           .toList(growable: false);
+      if (paragraphs.length <= 2) {
+        paragraphs = normalized
+            .split('\n')
+            .map((p) => p.trim())
+            .where((p) => p.isNotEmpty)
+            .toList(growable: false);
+      }
+      _paraCache = paragraphs;
       _paragraphOffsets = List<int>.filled(_paraCache!.length + 1, 0);
       for (var i = 0; i < _paraCache!.length; i++) {
         _paragraphOffsets[i + 1] = _paragraphOffsets[i] + _paraCache![i].length;
@@ -740,9 +753,7 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   Widget _endFooter(ReaderTheme theme, bool isLast) {
     final color = theme.fg.withValues(alpha: 0.5);
-    final label = isLast
-        ? 'Swipe left to finish'
-        : 'Swipe left for next chapter';
+    final label = isLast ? 'Tap to finish' : 'Swipe left for next chapter';
     return Center(
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
