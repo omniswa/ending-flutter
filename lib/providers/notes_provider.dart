@@ -17,6 +17,29 @@ enum NoteExportFormat {
   final String extension;
 }
 
+String _formatNoteExport({
+  required String title,
+  required String body,
+  required NoteExportFormat format,
+}) {
+  final heading = title.trim();
+  final markdown = format == NoteExportFormat.markdown;
+  final text = StringBuffer();
+  if (heading.isNotEmpty) {
+    text.write(markdown ? '# $heading' : heading);
+    text.write('\n\n');
+  }
+  text
+    ..write(body.trimRight())
+    ..write('\n');
+  if (markdown) {
+    text.write('\n---\n\n*Exported from 3NDING*\n');
+  } else {
+    text.write('\nExported from 3NDING\n');
+  }
+  return text.toString();
+}
+
 class NotesProvider extends ChangeNotifier {
   NotesProvider(this._store) {
     _loaded = _load();
@@ -140,13 +163,7 @@ class NotesProvider extends ChangeNotifier {
     required NoteExportFormat format,
   }) async {
     final heading = title.trim();
-    final text = StringBuffer();
-    if (heading.isNotEmpty) {
-      text.write(format == NoteExportFormat.markdown ? '# $heading' : heading);
-      text.write('\n\n');
-    }
-    text.write(body.trimRight());
-    text.write('\n');
+    final text = _formatNoteExport(title: title, body: body, format: format);
 
     final safe = heading
         .replaceAll(RegExp(r'[\\/:*?"<>|\x00-\x1F]'), '_')
@@ -157,7 +174,7 @@ class NotesProvider extends ChangeNotifier {
     final saved = await FilePicker.saveFile(
       dialogTitle: 'Export note',
       fileName: '$name${format.extension}',
-      bytes: Uint8List.fromList(utf8.encode(text.toString())),
+      bytes: Uint8List.fromList(utf8.encode(text)),
     );
     return saved != null;
   }
@@ -169,12 +186,11 @@ class NotesProvider extends ChangeNotifier {
     final archive = Archive();
     final usedNames = <String>{};
     for (final note in snapshot) {
-      final heading = note.title.trim();
-      final text = StringBuffer();
-      if (heading.isNotEmpty) text.write('# $heading\n\n');
-      text
-        ..write(note.body.trimRight())
-        ..write('\n');
+      final text = _formatNoteExport(
+        title: note.title,
+        body: note.body,
+        format: NoteExportFormat.markdown,
+      );
 
       final safe = note.displayTitle
           .replaceAll(RegExp(r'[\\/:*?"<>|\x00-\x1F]'), '_')
@@ -188,7 +204,7 @@ class NotesProvider extends ChangeNotifier {
         suffix++;
       }
 
-      final bytes = utf8.encode(text.toString());
+      final bytes = utf8.encode(text);
       archive.addFile(ArchiveFile(fileName, bytes.length, bytes));
     }
 

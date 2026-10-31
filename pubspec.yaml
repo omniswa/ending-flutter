@@ -9,6 +9,7 @@ environment:
 dependencies:
   archive: ^4.5.2
   cached_network_image: ^4.0.5
+  characters: ^1.4.1
   file_picker: ^13.2.0
   flutter:
     sdk: flutter

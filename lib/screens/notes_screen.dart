@@ -116,7 +116,7 @@ class NotesScreen extends StatelessWidget {
                       gridDelegate:
                           const SliverGridDelegateWithMaxCrossAxisExtent(
                             maxCrossAxisExtent: 200,
-                            mainAxisExtent: 196,
+                            mainAxisExtent: 180,
                             mainAxisSpacing: 12,
                             crossAxisSpacing: 12,
                           ),

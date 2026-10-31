@@ -47,6 +47,7 @@ class Book {
   final String cover;
   final String file;
   final bool isEpub;
+  bool get isText => Uri.parse(file).path.toLowerCase().endsWith('.txt');
 
   static int compareNewestFirst(Book a, Book b) {
     final byDate = b.added.compareTo(a.added);

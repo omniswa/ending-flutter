@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../models/favorite_entry.dart';
+import '../models/reader_highlight.dart';
 import '../models/reading_progress.dart';
 import '../services/local_store.dart';
 
@@ -14,10 +15,12 @@ class UserDataProvider extends ChangeNotifier {
   static const _favKey = 'favorites_v1';
   static const _progressKey = 'progress_v1';
   static const _finishedKey = 'finished_v1';
+  static const _highlightsKey = 'reader_highlights_v1';
 
   final LocalStore _store;
   final Map<int, FavoriteEntry> _favs = {};
   final Map<int, ReadingProgress> _progress = {};
+  final Map<String, ReaderHighlight> _highlights = {};
   final Set<int> _finished = {};
 
   void _restore() {
@@ -54,6 +57,33 @@ class UserDataProvider extends ChangeNotifier {
         }
       }
     }
+    final h = _store.readJson(_highlightsKey);
+    if (h is List) {
+      var removedOverlap = false;
+      for (final e in h) {
+        try {
+          final highlight = ReaderHighlight.fromJson(e as Map<String, dynamic>);
+          if (highlight.start >= 0 &&
+              highlight.end > highlight.start &&
+              highlight.quote.isNotEmpty &&
+              !_highlights.values.any(
+                (saved) =>
+                    saved.bookId == highlight.bookId &&
+                    saved.chapter == highlight.chapter &&
+                    saved.paragraph == highlight.paragraph &&
+                    saved.start < highlight.end &&
+                    saved.end > highlight.start,
+              )) {
+            _highlights[highlight.id] = highlight;
+          } else {
+            removedOverlap = true;
+          }
+        } on Object {
+          continue;
+        }
+      }
+      if (removedOverlap) _saveHighlights(notify: false);
+    }
     if (migrated) {
       _saveFinished(notify: false);
       _saveFavs(notify: false);
@@ -70,6 +100,60 @@ class UserDataProvider extends ChangeNotifier {
   bool isFinished(int id) => _finished.contains(id);
   FavoriteEntry? favoriteFor(int id) => _favs[id];
   ReadingProgress? progressFor(int id) => _progress[id];
+
+  List<ReaderHighlight> highlightsFor(int bookId, int chapter, int paragraph) =>
+      _highlights.values
+          .where(
+            (highlight) =>
+                highlight.bookId == bookId &&
+                highlight.chapter == chapter &&
+                highlight.paragraph == paragraph,
+          )
+          .toList()
+        ..sort((a, b) => a.start.compareTo(b.start));
+
+  List<ReaderHighlight> highlightsForBook(int bookId) =>
+      _highlights.values
+          .where((highlight) => highlight.bookId == bookId)
+          .toList()
+        ..sort((a, b) {
+          final chapterOrder = a.chapter.compareTo(b.chapter);
+          if (chapterOrder != 0) return chapterOrder;
+          final paragraphOrder = a.paragraph.compareTo(b.paragraph);
+          return paragraphOrder != 0
+              ? paragraphOrder
+              : a.start.compareTo(b.start);
+        });
+
+  bool hasHighlight(ReaderHighlight highlight) =>
+      _highlights.containsKey(highlight.id);
+
+  bool toggleHighlight(ReaderHighlight highlight) {
+    if (_highlights.remove(highlight.id) != null) {
+      _saveHighlights();
+      return true;
+    }
+    final overlaps = _highlights.values.any(
+      (saved) =>
+          saved.bookId == highlight.bookId &&
+          saved.chapter == highlight.chapter &&
+          saved.paragraph == highlight.paragraph &&
+          saved.start < highlight.end &&
+          saved.end > highlight.start,
+    );
+    if (overlaps) return false;
+    _highlights[highlight.id] = highlight;
+    _saveHighlights();
+    return true;
+  }
+
+  void _saveHighlights({bool notify = true}) {
+    _store.writeJson(
+      _highlightsKey,
+      _highlights.values.map((entry) => entry.toJson()).toList(),
+    );
+    if (notify) notifyListeners();
+  }
 
   void toggleFavorite(int id) {
     if (_favs.remove(id) == null) {

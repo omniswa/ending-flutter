@@ -287,7 +287,11 @@ class BookRepository {
     if (res.statusCode != 200) {
       throw HttpException('Download failed (${res.statusCode})');
     }
-    final chapters = await compute(_extractBook, (res.bodyBytes, book.isEpub));
+    final chapters = await compute(_extractBook, (
+      res.bodyBytes,
+      book.isEpub,
+      book.isText,
+    ));
     final tmp = Directory('${dir.path}.tmp');
     if (tmp.existsSync()) await tmp.delete(recursive: true);
     await tmp.create(recursive: true);
@@ -337,8 +341,9 @@ class BookRepository {
   }
 }
 
-Map<String, String> _extractBook((Uint8List, bool) input) {
-  final (bytes, isEpub) = input;
+Map<String, String> _extractBook((Uint8List, bool, bool) input) {
+  final (bytes, isEpub, isText) = input;
+  if (isText) return _extractTextBook(bytes);
   final archive = ZipDecoder().decodeBytes(bytes);
   if (isEpub) return _extractEpub(archive);
 
@@ -352,6 +357,64 @@ Map<String, String> _extractBook((Uint8List, bool) input) {
     if (!keep) continue;
     out[name] = utf8.decode(f.content as List<int>, allowMalformed: true);
   }
+  return out;
+}
+
+Map<String, String> _extractTextBook(Uint8List bytes) {
+  final text = _stripBom(utf8.decode(bytes, allowMalformed: true))
+      .replaceAll('\r\n', '\n')
+      .replaceAll('\r', '\n');
+  if (text.trim().isEmpty) {
+    throw const FormatException('This text book is empty.');
+  }
+
+  final headingPattern = RegExp(
+    r'^\s*--+\s*(?:chapter\s+\d+(?:\s*[:.-]\s*(.+?))?|(.+?))\s*--+\s*$',
+    caseSensitive: false,
+  );
+  final lines = text.split('\n');
+  final chapters = <String>[];
+  final titles = <String?>[];
+  final body = StringBuffer();
+  String? title;
+  var foundHeading = false;
+
+  void saveChapter() {
+    final chapter = body.toString().trim();
+    if (chapter.isNotEmpty) {
+      chapters.add(chapter);
+      titles.add(title?.trim().isNotEmpty == true ? title!.trim() : null);
+    }
+    body.clear();
+  }
+
+  for (final line in lines) {
+    final heading = headingPattern.firstMatch(line);
+    if (heading == null) {
+      if (body.isNotEmpty) body.writeln();
+      body.write(line);
+      continue;
+    }
+
+    if (foundHeading) saveChapter();
+    foundHeading = true;
+    title = heading.group(1) ?? heading.group(2);
+  }
+  saveChapter();
+
+  if (chapters.isEmpty) {
+    chapters.add(text.trim());
+    titles.add(null);
+  }
+
+  final out = <String, String>{};
+  final entries = <Map<String, String?>>[];
+  for (var i = 0; i < chapters.length; i++) {
+    final name = '${i + 1}.txt';
+    out[name] = chapters[i];
+    entries.add({'file': name, 'title': titles[i]});
+  }
+  out['manifest.json'] = jsonEncode({'chapters': entries});
   return out;
 }
 

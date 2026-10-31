@@ -3,17 +3,23 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
+
 import 'package:provider/provider.dart';
 
 import '../core/config.dart';
 import '../core/theme.dart';
 import '../models/book.dart';
+import '../models/note.dart';
+import '../models/reader_highlight.dart';
 import '../models/reader_prefs.dart';
 import '../models/reading_progress.dart';
+import '../providers/notes_provider.dart';
 import '../providers/reader_settings_provider.dart';
 import '../providers/user_data_provider.dart';
+import '../screens/note_editor_screen.dart';
 import '../services/book_repository.dart';
 import '../widgets/common.dart';
+import '../widgets/quote_card.dart';
 import '../widgets/reader_settings_sheet.dart';
 
 class ReaderScreen extends StatefulWidget {
@@ -30,6 +36,8 @@ class ReaderScreen extends StatefulWidget {
 
 class _ReaderScreenState extends State<ReaderScreen>
     with WidgetsBindingObserver {
+  static const _maxQuoteCharacters = 200;
+
   late final BookRepository _repo;
   late final UserDataProvider _user;
   late final ReaderSettingsProvider _settings;
@@ -201,7 +209,7 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   ({
     ({int paragraph, double offset}) location,
-    RenderParagraph box,
+    RenderBox box,
     double viewportTop,
   })?
   _visibleParagraph() {
@@ -210,10 +218,10 @@ class _ReaderScreenState extends State<ReaderScreen>
     final viewportTop = _readingTop(_viewportTop());
     var top = double.infinity;
     ({int paragraph, double offset})? location;
-    RenderParagraph? visibleBox;
+    RenderBox? visibleBox;
     for (final entry in _paragraphContexts.entries) {
-      final renderObject = entry.value.findRenderObject();
-      if (renderObject is! RenderParagraph || !renderObject.hasSize) continue;
+      final renderObject = _paragraphRenderObject(entry.key);
+      if (renderObject == null || !renderObject.hasSize) continue;
       final paragraphTop = renderObject.localToGlobal(Offset.zero).dy;
       final paragraphBottom = paragraphTop + renderObject.size.height;
       if (paragraphBottom <= viewportTop || paragraphTop >= top) continue;
@@ -222,9 +230,10 @@ class _ReaderScreenState extends State<ReaderScreen>
       final localY = (viewportTop - paragraphTop)
           .clamp(0.0, renderObject.size.height)
           .toDouble();
-      final textOffset = renderObject
-          .getPositionForOffset(Offset(0, localY))
-          .offset;
+      final textOffset = _positionForPoint(
+        renderObject,
+        renderObject.localToGlobal(Offset(0, localY)),
+      ).offset;
       final textLength = _paragraphsFor(chapters[_chapter])[entry.key].length;
       location = (
         paragraph: entry.key,
@@ -239,8 +248,8 @@ class _ReaderScreenState extends State<ReaderScreen>
     final paragraphs = _paragraphsFor(chapters[_chapter]);
     if (paragraphs.isNotEmpty) {
       final index = paragraphs.length - 1;
-      final renderObject = _paragraphContexts[index]?.findRenderObject();
-      if (renderObject is RenderParagraph && renderObject.hasSize) {
+      final renderObject = _paragraphRenderObject(index);
+      if (renderObject != null && renderObject.hasSize) {
         final lastBottom =
             renderObject.localToGlobal(Offset.zero).dy +
             renderObject.size.height;
@@ -256,6 +265,39 @@ class _ReaderScreenState extends State<ReaderScreen>
     }
     return null;
   }
+
+  RenderBox? _paragraphRenderObject(int index) {
+    RenderBox? findTextRenderObject(RenderObject? object) {
+      if (object case final RenderParagraph paragraph) return paragraph;
+      if (object case final RenderEditable editable) return editable;
+      RenderBox? found;
+      object?.visitChildren((child) {
+        found ??= findTextRenderObject(child);
+      });
+      return found;
+    }
+
+    return findTextRenderObject(_paragraphContexts[index]?.findRenderObject());
+  }
+
+  TextPosition _positionForPoint(RenderBox box, Offset globalPosition) =>
+      switch (box) {
+        RenderParagraph paragraph => paragraph.getPositionForOffset(
+          paragraph.globalToLocal(globalPosition),
+        ),
+        RenderEditable editable => editable.getPositionForPoint(globalPosition),
+        _ => const TextPosition(offset: 0),
+      };
+
+  Offset _caretOffsetFor(RenderBox box, int textOffset) => switch (box) {
+    RenderParagraph paragraph => paragraph.getOffsetForCaret(
+      TextPosition(offset: textOffset),
+      Rect.zero,
+    ),
+    RenderEditable editable =>
+      editable.getLocalRectForCaret(TextPosition(offset: textOffset)).topLeft,
+    _ => Offset.zero,
+  };
 
   void _restoreLocation(
     ({int paragraph, double offset})? target, {
@@ -282,23 +324,17 @@ class _ReaderScreenState extends State<ReaderScreen>
 
         final visible = _visibleParagraph();
         if (visible?.location.paragraph == target.paragraph) {
-          final targetContext = _paragraphContexts[target.paragraph];
-          final targetBox = targetContext?.findRenderObject();
+          final targetBox = _paragraphRenderObject(target.paragraph);
           final atChapterStart =
               target.paragraph == 0 &&
               target.offset == 0 &&
               targetFraction == 0;
-          if (!atChapterStart &&
-              targetBox is RenderParagraph &&
-              targetBox.hasSize) {
+          if (!atChapterStart && targetBox != null && targetBox.hasSize) {
             final textOffset =
                 (paragraphs[target.paragraph].length * target.offset)
                     .round()
                     .clamp(0, paragraphs[target.paragraph].length);
-            final caretOffset = targetBox.getOffsetForCaret(
-              TextPosition(offset: textOffset),
-              Rect.zero,
-            );
+            final caretOffset = _caretOffsetFor(targetBox, textOffset);
             final pointY = targetBox.localToGlobal(caretOffset).dy;
             final delta = pointY - visible!.viewportTop;
             final next = (position.pixels + delta).clamp(0.0, max);
@@ -344,10 +380,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     final textOffset = (paragraphs[location.paragraph].length * location.offset)
         .round()
         .clamp(0, paragraphs[location.paragraph].length);
-    final caretOffset = visible.box.getOffsetForCaret(
-      TextPosition(offset: textOffset),
-      Rect.zero,
-    );
+    final caretOffset = _caretOffsetFor(visible.box, textOffset);
     final targetY = visible.box.localToGlobal(caretOffset).dy;
     final generation = ++_relayoutGeneration;
     _restoring = true;
@@ -357,13 +390,9 @@ class _ReaderScreenState extends State<ReaderScreen>
           generation != _relayoutGeneration) {
         return;
       }
-      final renderObject = _paragraphContexts[location.paragraph]
-          ?.findRenderObject();
-      if (renderObject is RenderParagraph && renderObject.hasSize) {
-        final caretOffset = renderObject.getOffsetForCaret(
-          TextPosition(offset: textOffset),
-          Rect.zero,
-        );
+      final renderObject = _paragraphRenderObject(location.paragraph);
+      if (renderObject != null && renderObject.hasSize) {
+        final caretOffset = _caretOffsetFor(renderObject, textOffset);
         final pointY = renderObject.localToGlobal(caretOffset).dy;
         final position = _scroll.position;
         final next = (position.pixels + pointY - targetY).clamp(
@@ -455,6 +484,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     _restoreGeneration++;
     _relayoutGeneration++;
     _restoring = false;
+    if (_scroll.hasClients) _scroll.jumpTo(0);
     setState(() => _chapter = i);
     _paragraphContexts.clear();
     _location = (paragraph: 0, offset: 0);
@@ -464,6 +494,44 @@ class _ReaderScreenState extends State<ReaderScreen>
       _scroll.jumpTo(0);
     });
     _persist();
+  }
+
+  void _goToHighlight(ReaderHighlight highlight) {
+    final chapters = _chapters;
+    if (chapters == null ||
+        highlight.chapter < 0 ||
+        highlight.chapter >= chapters.length) {
+      return;
+    }
+    final paragraphs = _paragraphsFor(chapters[highlight.chapter]);
+    if (highlight.paragraph < 0 || highlight.paragraph >= paragraphs.length) {
+      return;
+    }
+    final paragraph = paragraphs[highlight.paragraph];
+    final target = (
+      paragraph: highlight.paragraph,
+      offset: paragraph.isEmpty
+          ? 0.0
+          : (highlight.start / paragraph.length).clamp(0.0, 1.0).toDouble(),
+    );
+    _dismissHint();
+    _restoreGeneration++;
+    _relayoutGeneration++;
+    _restoring = false;
+    if (_chapter == highlight.chapter) {
+      _restoreLocation(target);
+      return;
+    }
+    setState(() => _chapter = highlight.chapter);
+    _paragraphContexts.clear();
+    _location = (paragraph: 0, offset: 0);
+    _fraction.value = 0;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _chapter != highlight.chapter || !_scroll.hasClients) {
+        return;
+      }
+      _restoreLocation(target);
+    });
   }
 
   void _maybeShowHint() {
@@ -640,6 +708,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       child: NotificationListener<ScrollNotification>(
         onNotification: _onScroll,
         child: CustomScrollView(
+          key: ValueKey<int>(_chapter),
           controller: _scroll,
           slivers: [
             SliverPadding(
@@ -667,10 +736,34 @@ class _ReaderScreenState extends State<ReaderScreen>
                       index: paragraphIndex,
                       onMount: _registerParagraph,
                       onUnmount: _unregisterParagraph,
-                      child: Text(
-                        paragraphs[paragraphIndex],
-                        textAlign: prefs.align,
-                        style: style,
+                      child: Selector<UserDataProvider, List<ReaderHighlight>>(
+                        key: ValueKey((
+                          style,
+                          prefs.align,
+                          paragraphs[paragraphIndex],
+                        )),
+                        selector: (_, userData) => userData.highlightsFor(
+                          widget.book.id,
+                          _chapter,
+                          paragraphIndex,
+                        ),
+                        builder: (context, highlights, _) =>
+                            SelectableText.rich(
+                              _paragraphText(
+                                paragraphs[paragraphIndex],
+                                highlights,
+                                style,
+                              ),
+                              onTap: _toggleChrome,
+                              textAlign: prefs.align,
+                              contextMenuBuilder:
+                                  (context, editableTextState) =>
+                                      _selectionToolbar(
+                                        context,
+                                        editableTextState,
+                                        paragraphIndex,
+                                      ),
+                            ),
                       ),
                     ),
                   );
@@ -679,6 +772,152 @@ class _ReaderScreenState extends State<ReaderScreen>
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  TextSpan _paragraphText(
+    String text,
+    List<ReaderHighlight> highlights,
+    TextStyle style,
+  ) {
+    final boundaries = <int>{0, text.length};
+    for (final highlight in highlights) {
+      final start = highlight.start.clamp(0, text.length);
+      final end = highlight.end.clamp(start, text.length);
+      if (start < end) {
+        boundaries
+          ..add(start)
+          ..add(end);
+      }
+    }
+    final sorted = boundaries.toList()..sort();
+    return TextSpan(
+      style: style,
+      children: [
+        for (var i = 0; i < sorted.length - 1; i++)
+          if (sorted[i] < sorted[i + 1])
+            TextSpan(
+              text: text.substring(sorted[i], sorted[i + 1]),
+              style:
+                  highlights.any(
+                    (highlight) =>
+                        highlight.start < sorted[i + 1] &&
+                        highlight.end > sorted[i],
+                  )
+                  ? const TextStyle(backgroundColor: Color(0x99FFD166))
+                  : null,
+            ),
+      ],
+    );
+  }
+
+  Widget _selectionToolbar(
+    BuildContext context,
+    EditableTextState editableTextState,
+    int paragraph,
+  ) {
+    final value = editableTextState.currentTextEditingValue;
+    if (!value.selection.isValid || value.selection.isCollapsed) {
+      return AdaptiveTextSelectionToolbar.editableText(
+        editableTextState: editableTextState,
+      );
+    }
+    var start = value.selection.start;
+    var end = value.selection.end;
+    while (start < end && value.text[start].trim().isEmpty) {
+      start++;
+    }
+    while (end > start && value.text[end - 1].trim().isEmpty) {
+      end--;
+    }
+    if (start >= end || end > value.text.length) {
+      return AdaptiveTextSelectionToolbar.editableText(
+        editableTextState: editableTextState,
+      );
+    }
+
+    final quote = value.text.substring(start, end);
+    final quoteLength = quote.characters.length;
+    final highlight = ReaderHighlight(
+      bookId: widget.book.id,
+      chapter: _chapter,
+      paragraph: paragraph,
+      start: start,
+      end: end,
+      quote: quote,
+    );
+    final alreadyHighlighted = context.read<UserDataProvider>().hasHighlight(
+      highlight,
+    );
+    if (quoteLength > _maxQuoteCharacters) {
+      return AdaptiveTextSelectionToolbar.buttonItems(
+        anchors: editableTextState.contextMenuAnchors,
+        buttonItems: [
+          ContextMenuButtonItem(
+            label: 'Keep selection under 200 characters',
+            onPressed: null,
+          ),
+        ],
+      );
+    }
+
+    final items = [
+      ContextMenuButtonItem(
+        label: alreadyHighlighted ? 'Remove highlight' : 'Highlight',
+        onPressed: () {
+          editableTextState.hideToolbar();
+          final saved = context.read<UserDataProvider>().toggleHighlight(
+            highlight,
+          );
+          if (!saved) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Highlights can’t overlap. Select a different passage.',
+                ),
+              ),
+            );
+          }
+        },
+      ),
+      ContextMenuButtonItem(
+        label: 'Add to notes',
+        onPressed: () {
+          editableTextState.hideToolbar();
+          _createNoteFromQuote(quote);
+        },
+      ),
+      ContextMenuButtonItem(
+        label: 'Quote card',
+        onPressed: () {
+          editableTextState.hideToolbar();
+          unawaited(
+            showQuoteCard(
+              context,
+              quote: quote,
+              bookTitle: widget.book.title,
+              chapter: _chapter,
+            ),
+          );
+        },
+      ),
+    ];
+    return AdaptiveTextSelectionToolbar.buttonItems(
+      anchors: editableTextState.contextMenuAnchors,
+      buttonItems: items,
+    );
+  }
+
+  void _createNoteFromQuote(String quote) {
+    final note = Note.create(
+      title: 'Quote from ${widget.book.title}',
+      body: '“$quote”\n\n— ${widget.book.title}, Chapter ${_chapter + 1}\n\n',
+    );
+    context.read<NotesProvider>().save(note);
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => NoteEditorScreen(noteId: note.id),
       ),
     );
   }
@@ -894,14 +1133,11 @@ class _ReaderScreenState extends State<ReaderScreen>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
-                    tooltip: fav ? 'Remove from favorites' : 'Add to favorites',
-                    onPressed: () => u.toggleFavorite(id),
-                    icon: Icon(
-                      fav
-                          ? Icons.favorite_rounded
-                          : Icons.favorite_border_rounded,
-                      color: fav ? AppColors.terracotta : theme.fg,
-                    ),
+                    onPressed: _chapters == null
+                        ? null
+                        : () => _showHighlights(theme),
+                    icon: Icon(Icons.bookmarks_outlined, color: theme.fg),
+                    tooltip: 'Highlights',
                   ),
                   PopupMenuButton<String>(
                     tooltip: 'More',
@@ -911,6 +1147,8 @@ class _ReaderScreenState extends State<ReaderScreen>
                     ),
                     onSelected: (v) {
                       switch (v) {
+                        case 'favorite':
+                          u.toggleFavorite(id);
                         case 'finished':
                           u.setFinished(id, finished: !done);
                         case 'refresh':
@@ -920,6 +1158,26 @@ class _ReaderScreenState extends State<ReaderScreen>
                       }
                     },
                     itemBuilder: (_) => [
+                      PopupMenuItem(
+                        value: 'favorite',
+                        child: Row(
+                          children: [
+                            Icon(
+                              fav
+                                  ? Icons.favorite_rounded
+                                  : Icons.favorite_border_rounded,
+                              size: 20,
+                              color: fav ? AppColors.terracotta : null,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              fav
+                                  ? 'Remove from favorites'
+                                  : 'Add to favorites',
+                            ),
+                          ],
+                        ),
+                      ),
                       PopupMenuItem(
                         value: 'finished',
                         child: Row(
@@ -1096,6 +1354,101 @@ class _ReaderScreenState extends State<ReaderScreen>
               },
             );
           },
+        ),
+      ),
+    );
+  }
+
+  void _showHighlights(ReaderTheme theme) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: theme.bg,
+      builder: (sheetContext) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.sizeOf(sheetContext).height * 0.7,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+                child: Text(
+                  'Highlights',
+                  style: TextStyle(
+                    color: theme.fg,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Consumer<UserDataProvider>(
+                  builder: (_, userData, _) {
+                    final highlights = userData.highlightsForBook(
+                      widget.book.id,
+                    );
+                    if (highlights.isEmpty) {
+                      return Center(
+                        child: Text(
+                          'Select a passage while reading to save a highlight.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: theme.fg.withValues(alpha: 0.65),
+                          ),
+                        ),
+                      );
+                    }
+                    return ListView.separated(
+                      itemCount: highlights.length,
+                      separatorBuilder: (_, _) => Divider(
+                        height: 1,
+                        color: theme.fg.withValues(alpha: 0.1),
+                      ),
+                      itemBuilder: (_, index) {
+                        final highlight = highlights[index];
+                        final chapterTitle =
+                            highlight.chapter >= 0 &&
+                                highlight.chapter < _titles.length
+                            ? _titles[highlight.chapter]
+                            : null;
+                        return ListTile(
+                          leading: Icon(
+                            Icons.format_quote_rounded,
+                            color: AppColors.terracotta,
+                          ),
+                          title: Text(
+                            highlight.quote,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: theme.fg),
+                          ),
+                          subtitle: Text(
+                            '${chapterTitle ?? 'Chapter ${highlight.chapter + 1}'} · Paragraph ${highlight.paragraph + 1}',
+                            style: TextStyle(
+                              color: theme.fg.withValues(alpha: 0.6),
+                            ),
+                          ),
+                          trailing: IconButton(
+                            tooltip: 'Delete highlight',
+                            icon: Icon(
+                              Icons.delete_outline_rounded,
+                              color: theme.fg.withValues(alpha: 0.65),
+                            ),
+                            onPressed: () =>
+                                userData.toggleHighlight(highlight),
+                          ),
+                          onTap: () {
+                            Navigator.pop(sheetContext);
+                            _goToHighlight(highlight);
+                          },
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
