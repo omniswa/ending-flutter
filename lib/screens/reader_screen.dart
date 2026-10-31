@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
+import 'package:positioned_sliver_list/positioned_sliver_list.dart';
 import 'package:provider/provider.dart';
 
 import '../core/config.dart';
@@ -42,12 +43,15 @@ class _ReaderScreenState extends State<ReaderScreen>
   late final UserDataProvider _user;
   late final ReaderSettingsProvider _settings;
   final _scroll = ScrollController();
+  final _listController = ListController();
   final _fraction = ValueNotifier<double>(0);
   final Map<int, BuildContext> _paragraphContexts = {};
+  final Map<int, GlobalKey> _paragraphItemKeys = {};
 
   List<String>? _chapters;
   List<String?> _titles = const [];
   List<int> _paragraphOffsets = const [];
+  List<int> _chapterCharacterOffsets = const [];
   ({int paragraph, double offset})? _location;
   Object? _error;
   int _chapter = 0;
@@ -81,6 +85,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     _hintTimer?.cancel();
     _user.flush();
     _scroll.dispose();
+    _listController.dispose();
     _fraction.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
@@ -99,8 +104,9 @@ class _ReaderScreenState extends State<ReaderScreen>
     if (refresh) _persist();
     _restoreGeneration++;
     _relayoutGeneration++;
-    _restoring = false;
+    _finishRestore();
     _paragraphContexts.clear();
+    _paragraphItemKeys.clear();
     setState(() {
       _error = null;
       _chapters = null;
@@ -122,15 +128,16 @@ class _ReaderScreenState extends State<ReaderScreen>
       final chapter = (saved?.chapter ?? 0)
           .clamp(0, chapters.length - 1)
           .toInt();
+      _chapterCharacterOffsets = _buildChapterCharacterOffsets(chapters);
+      final paragraphs = _paragraphsFor(chapters[chapter]);
+      final location = _savedLocation(saved, paragraphs);
       setState(() {
         _chapters = chapters;
         _titles = content.titles;
         _chapter = chapter;
+        _location = location;
       });
-      final paragraphs = _paragraphsFor(chapters[chapter]);
-      _location = _savedLocation(saved, paragraphs);
-      _fraction.value = _chapterFraction(_location, paragraphs);
-      _restoreLocation(_location);
+      _fraction.value = _chapterFraction(location, paragraphs);
       _persist();
       _maybeShowHint();
     } on Object catch (e, st) {
@@ -207,6 +214,16 @@ class _ReaderScreenState extends State<ReaderScreen>
     return viewportTop + MediaQuery.of(context).padding.top + 76;
   }
 
+  double _readingAlignment() {
+    final viewportHeight = _scroll.hasClients
+        ? _scroll.position.viewportDimension
+        : MediaQuery.of(context).size.height;
+    if (viewportHeight <= 0) return 0;
+    return ((MediaQuery.of(context).padding.top + 76) / viewportHeight)
+        .clamp(0.0, 1.0)
+        .toDouble();
+  }
+
   ({
     ({int paragraph, double offset}) location,
     RenderBox box,
@@ -216,6 +233,20 @@ class _ReaderScreenState extends State<ReaderScreen>
     final chapters = _chapters;
     if (!_scroll.hasClients || chapters == null) return null;
     final viewportTop = _readingTop(_viewportTop());
+    final paragraphs = _paragraphsFor(chapters[_chapter]);
+    if (_scroll.position.maxScrollExtent > 0 &&
+        _scroll.position.extentAfter <= 1 &&
+        paragraphs.isNotEmpty) {
+      final index = paragraphs.length - 1;
+      final renderObject = _paragraphRenderObject(index);
+      if (renderObject != null && renderObject.hasSize) {
+        return (
+          location: (paragraph: index, offset: 1.0),
+          box: renderObject,
+          viewportTop: viewportTop,
+        );
+      }
+    }
     var top = double.infinity;
     ({int paragraph, double offset})? location;
     RenderBox? visibleBox;
@@ -245,7 +276,6 @@ class _ReaderScreenState extends State<ReaderScreen>
     if (location != null && visibleBox != null) {
       return (location: location, box: visibleBox, viewportTop: viewportTop);
     }
-    final paragraphs = _paragraphsFor(chapters[_chapter]);
     if (paragraphs.isNotEmpty) {
       final index = paragraphs.length - 1;
       final renderObject = _paragraphRenderObject(index);
@@ -267,17 +297,36 @@ class _ReaderScreenState extends State<ReaderScreen>
   }
 
   RenderBox? _paragraphRenderObject(int index) {
-    RenderBox? findTextRenderObject(RenderObject? object) {
-      if (object case final RenderParagraph paragraph) return paragraph;
-      if (object case final RenderEditable editable) return editable;
-      RenderBox? found;
-      object?.visitChildren((child) {
-        found ??= findTextRenderObject(child);
-      });
-      return found;
-    }
+    return _findTextRenderObject(_paragraphContexts[index]?.findRenderObject());
+  }
 
-    return findTextRenderObject(_paragraphContexts[index]?.findRenderObject());
+  RenderBox? _findTextRenderObject(RenderObject? object) {
+    if (object case final RenderParagraph paragraph) return paragraph;
+    if (object case final RenderEditable editable) return editable;
+    RenderBox? found;
+    object?.visitChildren((child) {
+      found ??= _findTextRenderObject(child);
+    });
+    return found;
+  }
+
+  Rect? _targetRectForItem(
+    int itemIndex,
+    RenderBox itemBox,
+    ({int paragraph, double offset}) target,
+    List<String> paragraphs,
+  ) {
+    if (itemIndex != target.paragraph + 1) return null;
+    final textBox = _findTextRenderObject(itemBox);
+    if (textBox == null || !textBox.hasSize || !itemBox.hasSize) return null;
+    final textOffset = (paragraphs[target.paragraph].length * target.offset)
+        .round()
+        .clamp(0, paragraphs[target.paragraph].length);
+    final globalOffset = textBox.localToGlobal(
+      _caretOffsetFor(textBox, textOffset),
+    );
+    final localOffset = itemBox.globalToLocal(globalOffset);
+    return Rect.fromLTWH(localOffset.dx, localOffset.dy, 1, 1);
   }
 
   TextPosition _positionForPoint(RenderBox box, Offset globalPosition) =>
@@ -299,82 +348,50 @@ class _ReaderScreenState extends State<ReaderScreen>
     _ => Offset.zero,
   };
 
-  void _restoreLocation(
-    ({int paragraph, double offset})? target, {
-    int passes = 16,
-  }) {
+  void _restoreLocation(({int paragraph, double offset})? target) {
     if (target == null) return;
+    final paragraphs = _paragraphsFor(_chapters![_chapter]);
+    _location = target;
+    _fraction.value = _chapterFraction(target, paragraphs);
+    if (target.paragraph == 0 && target.offset == 0) {
+      if (_scroll.hasClients) _scroll.jumpTo(0);
+      return;
+    }
+    if (!_listController.isAttached || !_scroll.hasClients) return;
     _restoring = true;
     final generation = ++_restoreGeneration;
-    final paragraphs = _paragraphsFor(_chapters![_chapter]);
-    final targetFraction = _chapterFraction(target, paragraphs);
-
-    void restorePass(int remaining, {bool estimate = false}) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (generation != _restoreGeneration) return;
-        if (!mounted || !_scroll.hasClients) {
-          _restoring = false;
-          return;
-        }
-        final position = _scroll.position;
-        final max = position.maxScrollExtent;
-        if (estimate && max > 0) {
-          position.jumpTo((max * targetFraction).clamp(0.0, max));
-        }
-
-        final visible = _visibleParagraph();
-        if (visible?.location.paragraph == target.paragraph) {
-          final targetBox = _paragraphRenderObject(target.paragraph);
-          final atChapterStart =
-              target.paragraph == 0 &&
-              target.offset == 0 &&
-              targetFraction == 0;
-          if (!atChapterStart && targetBox != null && targetBox.hasSize) {
-            final textOffset =
-                (paragraphs[target.paragraph].length * target.offset)
-                    .round()
-                    .clamp(0, paragraphs[target.paragraph].length);
-            final caretOffset = _caretOffsetFor(targetBox, textOffset);
-            final pointY = targetBox.localToGlobal(caretOffset).dy;
-            final delta = pointY - visible!.viewportTop;
-            final next = (position.pixels + delta).clamp(0.0, max);
-            if ((next - position.pixels).abs() > 1) position.jumpTo(next);
-          }
-          _location = target;
-          _fraction.value = targetFraction;
-          _restoring = false;
-          return;
-        }
-        if (remaining <= 0) {
-          _restoring = false;
-          if (visible != null) {
-            _location = visible.location;
-            _fraction.value = _chapterFraction(visible.location, paragraphs);
-          }
-          return;
-        }
-
-        final currentFraction = visible == null
-            ? (max > 0 ? position.pixels / max : 0.0)
-            : _chapterFraction(visible.location, paragraphs);
-        final correction = (targetFraction - currentFraction) * max;
-        final next = (position.pixels + correction).clamp(0.0, max);
-        if ((next - position.pixels).abs() <= 1) {
-          _restoring = false;
-          return;
-        }
-        position.jumpTo(next);
-        restorePass(remaining - 1);
-      });
-    }
-
-    restorePass(passes, estimate: true);
+    final itemIndex = target.paragraph + 1;
+    _listController.jumpToItem(
+      index: itemIndex,
+      scrollController: _scroll,
+      alignment: _readingAlignment(),
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || generation != _restoreGeneration) return;
+      final itemBox = _paragraphItemKeys[target.paragraph]?.currentContext
+          ?.findRenderObject();
+      if (_scroll.hasClients &&
+          _listController.isAttached &&
+          itemBox is RenderBox &&
+          itemBox.hasSize) {
+        _listController.jumpToItem(
+          index: itemIndex,
+          scrollController: _scroll,
+          alignment: _readingAlignment(),
+          rect: _targetRectForItem(itemIndex, itemBox, target, paragraphs),
+        );
+      }
+      _finishRestore();
+    });
   }
+
+  void _finishRestore() => _restoring = false;
 
   void _preservePositionOnRelayout() {
     final visible = _visibleParagraph();
     if (visible == null) return;
     _restoreGeneration++;
+    _finishRestore();
     final location = visible.location;
     final paragraphs = _paragraphsFor(_chapters![_chapter]);
     final textOffset = (paragraphs[location.paragraph].length * location.offset)
@@ -403,7 +420,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       }
       _location = location;
       _fraction.value = _chapterFraction(location, paragraphs);
-      _restoring = false;
+      _finishRestore();
     });
   }
 
@@ -424,7 +441,7 @@ class _ReaderScreenState extends State<ReaderScreen>
         return false;
       }
       _restoreGeneration++;
-      _restoring = false;
+      _finishRestore();
     }
     if (_chapters == null) return false;
     final visible = _visibleParagraph();
@@ -441,17 +458,16 @@ class _ReaderScreenState extends State<ReaderScreen>
   }
 
   ({double percent, int minutes}) _stats() {
-    final ch = _chapters!;
-    final total = ch.fold<int>(0, (s, c) => s + c.length);
+    final total = _chapterCharacterOffsets.last;
     if (total == 0) return (percent: 0, minutes: 0);
-    var before = 0;
-    for (var i = 0; i < _chapter; i++) {
-      before += ch[i].length;
-    }
-    final pos = before + ch[_chapter].length * _fraction.value;
+    final before = _chapterCharacterOffsets[_chapter];
+    final chapterLength = _chapterCharacterOffsets[_chapter + 1] - before;
+    final pos = before + chapterLength * _fraction.value;
     final words = (total - pos) / AppConfig.charsPerWord;
+    final isAtBookEnd =
+        _chapter == _chapterCharacterOffsets.length - 2 && _fraction.value >= 1;
     return (
-      percent: (pos / total).clamp(0.0, 1.0).toDouble(),
+      percent: (pos / total).clamp(0.0, isAtBookEnd ? 1.0 : 0.999).toDouble(),
       minutes: (words / AppConfig.wordsPerMinute).ceil(),
     );
   }
@@ -483,10 +499,11 @@ class _ReaderScreenState extends State<ReaderScreen>
     _dismissHint();
     _restoreGeneration++;
     _relayoutGeneration++;
-    _restoring = false;
+    _finishRestore();
     if (_scroll.hasClients) _scroll.jumpTo(0);
     setState(() => _chapter = i);
     _paragraphContexts.clear();
+    _paragraphItemKeys.clear();
     _location = (paragraph: 0, offset: 0);
     _fraction.value = 0;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -517,21 +534,16 @@ class _ReaderScreenState extends State<ReaderScreen>
     _dismissHint();
     _restoreGeneration++;
     _relayoutGeneration++;
-    _restoring = false;
+    _finishRestore();
     if (_chapter == highlight.chapter) {
       _restoreLocation(target);
       return;
     }
+    _location = target;
+    _fraction.value = _chapterFraction(target, paragraphs);
     setState(() => _chapter = highlight.chapter);
     _paragraphContexts.clear();
-    _location = (paragraph: 0, offset: 0);
-    _fraction.value = 0;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _chapter != highlight.chapter || !_scroll.hasClients) {
-        return;
-      }
-      _restoreLocation(target);
-    });
+    _paragraphItemKeys.clear();
   }
 
   void _maybeShowHint() {
@@ -598,6 +610,13 @@ class _ReaderScreenState extends State<ReaderScreen>
       ),
     );
     if (finish != true || !mounted) return;
+    final paragraphs = _paragraphsFor(_chapters![_chapter]);
+    if (paragraphs.isNotEmpty) {
+      _location = (paragraph: paragraphs.length - 1, offset: 1);
+      _fraction.value = 1;
+      _persist();
+      _user.flush();
+    }
     _user.setFinished(widget.book.id, finished: true);
     Navigator.of(context).maybePop();
   }
@@ -718,7 +737,20 @@ class _ReaderScreenState extends State<ReaderScreen>
                 prefs.margin,
                 media.padding.bottom + 100,
               ),
-              sliver: SliverList.builder(
+              sliver: SuperSliverList.builder(
+                listController: _listController,
+                initialIndex:
+                    _location != null &&
+                        !(_location!.paragraph == 0 && _location!.offset == 0)
+                    ? _location!.paragraph + 1
+                    : null,
+                initialAlignment: _readingAlignment(),
+                initialTargetRectResolver: (index, itemBox) {
+                  final target = _location;
+                  return target == null
+                      ? null
+                      : _targetRectForItem(index, itemBox, target, paragraphs);
+                },
                 itemCount: paragraphs.length + 2,
                 itemBuilder: (context, index) {
                   if (index == 0) return _chapterHeader(theme, style);
@@ -730,6 +762,10 @@ class _ReaderScreenState extends State<ReaderScreen>
                   }
                   final paragraphIndex = index - 1;
                   return Padding(
+                    key: _paragraphItemKeys.putIfAbsent(
+                      paragraphIndex,
+                      GlobalKey.new,
+                    ),
                     padding: EdgeInsets.only(bottom: prefs.fontSize * 0.9),
                     child: _TrackedParagraph(
                       key: ValueKey('$_chapter-$paragraphIndex'),
@@ -965,26 +1001,40 @@ class _ReaderScreenState extends State<ReaderScreen>
   List<String> _paragraphsFor(String text) {
     if (_paraCache == null || !identical(_paraSource, text)) {
       _paraSource = text;
-      final normalized = text.replaceAll('\r\n', '\n').trim();
-      var paragraphs = normalized
-          .split(RegExp(r'\n\s*\n'))
-          .map((p) => p.trim())
-          .where((p) => p.isNotEmpty)
-          .toList(growable: false);
-      if (paragraphs.length <= 2) {
-        paragraphs = normalized
-            .split('\n')
-            .map((p) => p.trim())
-            .where((p) => p.isNotEmpty)
-            .toList(growable: false);
-      }
-      _paraCache = paragraphs;
+      _paraCache = _splitParagraphs(text);
       _paragraphOffsets = List<int>.filled(_paraCache!.length + 1, 0);
       for (var i = 0; i < _paraCache!.length; i++) {
         _paragraphOffsets[i + 1] = _paragraphOffsets[i] + _paraCache![i].length;
       }
     }
     return _paraCache!;
+  }
+
+  List<int> _buildChapterCharacterOffsets(List<String> chapters) {
+    final offsets = List<int>.filled(chapters.length + 1, 0);
+    for (var chapter = 0; chapter < chapters.length; chapter++) {
+      final chapterLength = _splitParagraphs(chapters[chapter])
+          .fold<int>(0, (total, paragraph) => total + paragraph.length);
+      offsets[chapter + 1] = offsets[chapter] + chapterLength;
+    }
+    return offsets;
+  }
+
+  List<String> _splitParagraphs(String text) {
+    final normalized = text.replaceAll('\r\n', '\n').trim();
+    var paragraphs = normalized
+        .split(RegExp(r'\n\s*\n'))
+        .map((paragraph) => paragraph.trim())
+        .where((paragraph) => paragraph.isNotEmpty)
+        .toList(growable: false);
+    if (paragraphs.length <= 2) {
+      paragraphs = normalized
+          .split('\n')
+          .map((paragraph) => paragraph.trim())
+          .where((paragraph) => paragraph.isNotEmpty)
+          .toList(growable: false);
+    }
+    return paragraphs;
   }
 
   ReaderPrefs? _styleSource;
@@ -1267,7 +1317,7 @@ class _ReaderScreenState extends State<ReaderScreen>
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              'Chapter ${_chapter + 1} of ${chapters.length} · ${(s.percent * 100).round()}%',
+                              'Chapter ${_chapter + 1} of ${chapters.length} · ${(s.percent * 100).floor()}%',
                               style: TextStyle(
                                 color: theme.fg.withValues(alpha: 0.75),
                                 fontSize: 12,

@@ -205,16 +205,58 @@ class _HomeScreenState extends State<HomeScreen> {
         ];
       case LoadState.error:
         return [
-          SliverToBoxAdapter(
-            child: EmptyState(
-              icon: Icons.wifi_off_rounded,
-              title: 'Couldn\'t load your library',
-              message: [
-                'Check your connection and try again.',
-                if (lib.errorMessage != null) 'Details: ${lib.errorMessage}',
-              ].join('\n\n'),
-              actionLabel: 'Retry',
-              onAction: lib.load,
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 24,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.wifi_off_rounded,
+                      size: 48,
+                      color: AppColors.sage,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Host error',
+                      style: Theme.of(context).textTheme.titleMedium,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'We couldn’t connect to the book host, so the library '
+                      'couldn’t be loaded. Check that you’re online and that '
+                      'your network allows the connection. The issue may be '
+                      'temporary; try again in a moment. Your saved favorites '
+                      'and reading progress are unchanged.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppColors.muted,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 20),
+                    Wrap(
+                      spacing: 12,
+                      alignment: WrapAlignment.center,
+                      children: [
+                        FilledButton(
+                          onPressed: lib.load,
+                          child: const Text('Retry'),
+                        ),
+                        TextButton(
+                          onPressed: () => SystemNavigator.pop(),
+                          child: const Text('Close'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ];
@@ -421,10 +463,10 @@ Future<void> _downloadBook(
         ),
       );
     }
-  } on Object catch (error) {
+  } on Object {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not download "${book.title}": $error')),
+        const SnackBar(content: Text('Host error. Could not download the book.')),
       );
     }
   }
@@ -437,10 +479,10 @@ Future<void> _refreshOfflineStatus(
 ) async {
   try {
     await library.refreshDownloadStatus(book);
-  } on Object catch (error) {
+  } on Object {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not check offline status: $error')),
+        const SnackBar(content: Text('Host error. Could not check offline status.')),
       );
     }
   }

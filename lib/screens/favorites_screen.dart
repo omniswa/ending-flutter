@@ -220,6 +220,29 @@ class _FavoriteCard extends StatelessWidget {
   const _FavoriteCard({super.key, required this.item});
   final _Item item;
 
+  Future<void> _refreshOfflineStatus(BuildContext context, Book book) async {
+    try {
+      await context.read<LibraryProvider>().refreshDownloadStatus(book);
+    } on Object {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Couldn’t check whether "${book.title}" is available offline. '
+            'Your favorite and reading progress are safe. Check your '
+            'connection and try again.',
+          ),
+          action: SnackBarAction(
+            label: 'Retry',
+            onPressed: () {
+              _refreshOfflineStatus(context, book);
+            },
+          ),
+        ),
+      );
+    }
+  }
+
   void _remove(BuildContext context, UserDataProvider user) {
     final book = item.book;
     final removed = user.removeFavorite(book.id);
@@ -244,15 +267,7 @@ class _FavoriteCard extends StatelessWidget {
       onTap: () async {
         await ReaderScreen.open(context, book);
         if (!context.mounted) return;
-        try {
-          await context.read<LibraryProvider>().refreshDownloadStatus(book);
-        } on Object catch (error) {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Could not check offline status: $error')),
-            );
-          }
-        }
+        await _refreshOfflineStatus(context, book);
       },
       trailing: PopupMenuButton<String>(
         tooltip: 'More',

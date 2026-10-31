@@ -16,7 +16,6 @@ class LibraryProvider extends ChangeNotifier {
   List<Book> _books = const [];
   Map<int, Book> _index = const {};
   LoadState _state = LoadState.loading;
-  Object? _error;
   String _query = '';
   List<Book>? _filtered;
   final Set<int> _downloaded = {};
@@ -25,7 +24,6 @@ class LibraryProvider extends ChangeNotifier {
 
   LoadState get state => _state;
   List<Book> get books => _books;
-  String? get errorMessage => _error?.toString();
   String get query => _query;
   Book? byId(int id) => _index[id];
   bool isDownloaded(int id) => _downloaded.contains(id);
@@ -47,7 +45,6 @@ class LibraryProvider extends ChangeNotifier {
   }
 
   Future<bool> load() async {
-    _error = null;
     if (_books.isEmpty) {
       _state = LoadState.loading;
       notifyListeners();
@@ -63,7 +60,6 @@ class LibraryProvider extends ChangeNotifier {
       unawaited(_refreshAllDownloadStatuses(list));
       succeeded = !catalog.refreshFailed;
     } on Object catch (e, st) {
-      _error = e;
       debugPrint('Library load failed: $e\n$st');
       if (_books.isEmpty) _state = LoadState.error;
     }

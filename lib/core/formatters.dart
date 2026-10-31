@@ -36,7 +36,7 @@ DateTime? parseLongDate(String input) {
   return DateTime(int.parse(m.group(3)!), month + 1, int.parse(m.group(2)!));
 }
 
-String formatPercent(double p) => '${(p * 100).round()}%';
+String formatPercent(double p) => '${(p * 100).floor()}%';
 
 String formatTimeLeft(int minutes) {
   if (minutes <= 0) return 'Done';

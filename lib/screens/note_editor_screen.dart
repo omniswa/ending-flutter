@@ -167,6 +167,8 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
                 const NotesErrorBanner(),
                 TextField(
                   controller: _title,
+                  minLines: 1,
+                  maxLines: null,
                   textCapitalization: TextCapitalization.sentences,
                   style: googleFontStyleWithWeight(
                     t.headlineSmall,
